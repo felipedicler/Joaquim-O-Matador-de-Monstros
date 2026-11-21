@@ -268,6 +268,9 @@ function alienPal(G, g, V) {
 const ALIEN_PALS = [
   alienPal('#58b838', '#2c7028', '#c040c0'),
   alienPal('#a050c8', '#602880', '#40d0a0'),
+  // Episódio 2
+  alienPal('#e07028', '#903818', '#f8d040'),
+  alienPal('#38b8c8', '#1c6878', '#f04080'),
 ];
 const ALIEN_SPR = ALIEN_PALS.map(p => [
   makeSprite(ALIEN_A.concat(ALIEN_L1), p),
@@ -404,6 +407,10 @@ const FONT = {
 };
 for (const k in FONT) FONT[k] = FONT[k].split(',');
 FONT['Ã'] = FONT.A;
+FONT['Ó'] = FONT.O;
+FONT['Ç'] = FONT.C;
+FONT['—'] = ['00000', '00000', '11111', '00000', '00000'];
+FONT['+'] = ['00000', '00100', '01110', '00100', '00000'];
 function rawText(t, x, y, col, s) {
   ctx.fillStyle = col;
   for (let i = 0; i < t.length; i++) {
@@ -412,6 +419,8 @@ function rawText(t, x, y, col, s) {
     if (ch === 'Ã') { // til
       [[1, -3], [2, -3], [4, -3], [0, -2], [2, -2], [3, -2]].forEach(([c, r]) => ctx.fillRect(cx + c * s, y + r * s, s, s));
     }
+    if (ch === 'Ó') [[3, -3], [2, -2]].forEach(([c, r]) => ctx.fillRect(cx + c * s, y + r * s, s, s)); // acento agudo
+    if (ch === 'Ç') [[2, 5], [3, 6], [1, 7], [2, 7]].forEach(([c, r]) => ctx.fillRect(cx + c * s, y + r * s, s, s)); // cedilha
   }
 }
 function textW(t, s = 1) { return t.length * 6 * s - s; }
@@ -557,12 +566,13 @@ const PILLARS = [], CONSOLES = [], FENCES = [];
 
 // ================== ESTADO DO JOGO ==================
 let G;
-function newGame() {
+function newGame(ep = 1, hp = 5, score = 0, pacocas = 0) {
   G = {
+    ep, score, pacocas, items: ep === 2 ? makeTomatoes() : [], embers: [], popups: [],
     state: 'play', t: 0, cam: 0, camLock: false, arena: [0, LEVEL_W],
     hitStop: 0, shake: 0, attackId: 0,
-    player: { x: 40, y: GROUND, vx: 0, vy: 0, face: 1, onGround: true, crouch: false, attackT: -1, hurtT: 0, invT: 0, hp: 5, dead: false, deadT: 0, walkT: 0 },
-    enemies: [260, 440, 620, 820, 1020].map((x, i) => ({ x, y: GROUND, vx: 0, face: -1, hp: 2, state: 'idle', t: 0, flash: 0, active: false, speed: 0.45 + (i % 3) * 0.12, variant: i % 2, anim: i * 7, lastHit: -1, gone: false })),
+    player: { x: 40, y: GROUND, vx: 0, vy: 0, face: 1, onGround: true, crouch: false, attackT: -1, hurtT: 0, invT: 0, hp, dead: false, deadT: 0, walkT: 0 },
+    enemies: [260, 440, 620, 820, 1020].map((x, i) => ({ x, y: GROUND, vx: 0, face: -1, hp: ep === 2 ? 3 : 2, state: 'idle', t: 0, flash: 0, active: false, speed: 0.45 + (i % 3) * 0.12, variant: i % 2 + (ep === 2 ? 2 : 0), anim: i * 7, lastHit: -1, gone: false })),
     boss: null, bossTimer: 0, endT: 0,
     parts: [], booms: [], fighters: [], bolts: [],
   };
@@ -699,6 +709,7 @@ function updateEnemies() {
         e.state = 'dying'; e.t = 0;
         boom(e.x, e.y - 10); G.shake = 6;
         debris(e.x, e.y - 10, [ALIEN_PALS[e.variant].G, ALIEN_PALS[e.variant].g, '#f8e040', '#a01830'], 16);
+        if (G.ep === 2) dropPacoca(e.x, e.y - 10);
       }
       continue;
     }
@@ -728,6 +739,7 @@ function spawnBoss() {
   G.boss = {
     x: right ? G.cam + W + 70 : G.cam - 70, face: right ? -1 : 1, hp: 10,
     state: 'enter', t: 0, flash: 0, legPh: 0, behindT: 0, lastHit: -1, cool: 30, gone: false,
+    kind: G.ep === 2 ? 'spider' : 'scorpion', aim: 100,
   };
 }
 function bossTail(b) {
@@ -751,6 +763,7 @@ function bossRect(b, lx, ly, w, h) {
 function updateBoss() {
   const b = G.boss, p = G.player;
   if (!b || b.gone) return;
+  if (b.kind === 'spider') return updateSpider(b);
   if (b.flash > 0) b.flash--;
   b.t++;
   if (b.state === 'dying') {
@@ -839,7 +852,7 @@ function renderBoss(b) {
 function drawBoss() {
   const b = G.boss;
   if (!b || b.gone) return;
-  renderBoss(b);
+  if (b.kind === 'spider') renderSpider(b); else renderBoss(b);
   const x = Math.round(b.x - 60 - G.cam), y = GROUND - 78;
   if (b.face > 0) ctx.drawImage(BCV, x, y);
   else { ctx.save(); ctx.scale(-1, 1); ctx.drawImage(BCV, -x - 128, y); ctx.restore(); }
@@ -865,6 +878,390 @@ function updateSky() {
 }
 
 // ================== ATUALIZAÇÃO PRINCIPAL ==================
+// =====================================================================
+// ============ EPISÓDIO 2 — O PLANETA DAS PAÇOCAS ======================
+// =====================================================================
+const BAYER2 = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+// bolha sombreada em pixel art (cols: contorno, escuro, médio, claro, brilho)
+function blob(w, h, cols, m = 0) {
+  const c = mk(w, h), g = c.getContext('2d');
+  const cx = w / 2, cy = h / 2, rx = w / 2 - m, ry = h / 2 - m;
+  const ins = (x, y) => { const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry; return dx * dx + dy * dy <= 1; };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!ins(x, y)) continue;
+    let col;
+    if (!ins(x - 1, y) || !ins(x + 1, y) || !ins(x, y - 1) || !ins(x, y + 1)) col = cols[0];
+    else {
+      const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry;
+      const l = 0.55 - nx * 0.3 - ny * 0.45 + (BAYER2[y & 3][x & 3] / 16 - 0.5) * 0.25;
+      col = l < 0.3 ? cols[1] : l < 0.6 ? cols[2] : l < 0.85 ? cols[3] : cols[4];
+    }
+    R(g, x, y, 1, 1, col);
+  }
+  return c;
+}
+
+// ---------- Itens: paçoca e tomate ----------
+const PACOCA = makeSprite([
+  ".kkkkkk.",
+  "kTtTTtTk",
+  "kTTtTTTk",
+  "ktTTTtTk",
+  "kTTtTTtk",
+  "kddddddk",
+  ".kkkkkk.",
+], { k: '#3a2010', T: '#e8b870', t: '#b07840', d: '#8a5a30' });
+const TOMATO = makeSprite([
+  "...gg...",
+  ".kgGGgk.",
+  "kRRgRRRk",
+  "kRWRRRRk",
+  "kRRRRRrk",
+  "kRRRRrrk",
+  ".krrrrk.",
+  "..kkkk..",
+], { k: '#300808', G: '#58c030', g: '#2a7018', R: '#e02818', r: '#981010', W: '#ffb0a0' });
+// tomates: [x, no ar?]
+const TOMATO_POS = [[150, 0], [210, 1], [330, 0], [470, 0], [530, 1], [700, 0], [760, 1], [900, 0], [960, 1], [1150, 0]];
+function makeTomatoes() { return TOMATO_POS.map(([x, air]) => ({ kind: 'tomato', x, y: air ? GROUND - 36 : GROUND, vy: 0, rest: true, t: 20, air })); }
+function dropPacoca(x, y) { G.items.push({ kind: 'pacoca', x, y, vy: -2.5, rest: false, t: 0 }); }
+function itemBox(it) { return { x: it.x - 4, y: it.y - 7, w: 8, h: 7 }; } // it.y = base do item
+function updateItems() {
+  const p = G.player;
+  for (const it of G.items) {
+    it.t++;
+    if (!it.rest) {
+      it.vy += 0.2; it.y += it.vy;
+      if (it.y >= GROUND) { it.y = GROUND; if (Math.abs(it.vy) > 1) it.vy *= -0.4; else { it.vy = 0; it.rest = true; } }
+    }
+    if (!p.dead && it.t > 12 && overlap(itemBox(it), playerBox(p))) {
+      it.taken = true;
+      if (it.kind === 'tomato') {
+        G.score += 100;
+        debris(it.x, it.y - 4, ['#e02818', '#ffb0a0', '#58c030'], 6);
+        G.popups.push({ x: it.x, y: it.y - 12, t: 0, txt: '+100', col: '#ffffff' });
+      } else {
+        G.pacocas++;
+        debris(it.x, it.y - 4, ['#e8b870', '#b07840', '#ffffff'], 6);
+        if (G.pacocas % 10 === 0) { p.hp++; G.popups.push({ x: p.x, y: p.y - 30, t: 0, txt: '+1 VIDA', col: '#ff6070' }); }
+      }
+    }
+  }
+  G.items = G.items.filter(it => !it.taken);
+  for (const u of G.popups) u.t++;
+  G.popups = G.popups.filter(u => u.t < 45);
+}
+function drawItems() {
+  for (const it of G.items) {
+    const s = it.kind === 'tomato' ? TOMATO : PACOCA;
+    const bobY = it.air ? Math.round(Math.sin(it.t * 0.08)) : 0;
+    spr(s, it.x - 4 - G.cam, it.y - s.height + bobY, false);
+  }
+}
+
+// ---------- Cenário do planeta ----------
+// céu avermelhado com faixas pontilhadas e uma estrela gigante
+const SKY2 = mk(256, 192);
+{
+  const g = SKY2.getContext('2d'), r = rng(9);
+  const bands = ['#1a0618', '#2e0a1e', '#4a1020', '#6e1a1e', '#9a2c1a'], edges = [0, 34, 66, 100, 134, 192];
+  for (let i = 0; i < 5; i++) R(g, 0, edges[i], 256, edges[i + 1] - edges[i], bands[i]);
+  for (let i = 1; i < 5; i++) for (let y = edges[i] - 4; y < edges[i]; y++) for (let x = 0; x < 256; x++)
+    if (BAYER2[y & 3][x & 3] >= (edges[i] - y) * 4) R(g, x, y, 1, 1, bands[i]);
+  for (let i = 0; i < 40; i++) R(g, (r() * 256) | 0, (r() * 60) | 0, 1, 1, r() < .7 ? '#7a5a7a' : '#ffffff');
+  g.drawImage(blob(44, 44, ['#601010', '#801810', '#c03818', '#f07028', '#ffb050']), 168, 24);
+}
+// vulcões ao fundo com rios de lava
+const CRATERS = [[120, 72], [380, 92]];
+const VOLC = mk(512, 192);
+{
+  const g = VOLC.getContext('2d'), r = rng(21), hgt = [];
+  for (let x = 0; x < 512; x++) {
+    let h = 150 + Math.sin(x * 0.02) * 8 + Math.sin(x * 0.057) * 5;
+    for (const [cx, cy] of CRATERS) { let d = Math.abs(x - cx); d = Math.min(d, 512 - d); h = Math.min(h, d < 6 ? cy : cy + (d - 6) * 1.1); }
+    hgt[x] = Math.round(h);
+  }
+  for (let x = 0; x < 512; x++) {
+    const slope = hgt[(x + 1) % 512] - hgt[(x + 511) % 512];
+    for (let y = hgt[x]; y < 192; y++) {
+      let col = y > 172 ? '#2a0e18' : '#3a1420';
+      if (y === hgt[x]) col = '#7a3030';
+      else if (slope < 0 && y < 172 && BAYER2[y & 3][x & 3] < 8) col = '#5a2028';
+      R(g, x, y, 1, 1, col);
+    }
+  }
+  for (const [cx, cy] of CRATERS) {
+    R(g, cx - 5, cy, 11, 1, '#ffd040'); R(g, cx - 6, cy + 1, 13, 1, '#f86010');
+    for (const dir of [-1, 1]) {
+      let x = cx + dir * 3, y = cy + 2;
+      while (y < 178) {
+        y++; x += dir * 0.85 + (r() - 0.5) * 0.8;
+        const xi = Math.round(x);
+        if (y <= hgt[((xi % 512) + 512) % 512]) continue;
+        R(g, xi, y, 2, 1, '#f86010');
+        if (r() < 0.4) R(g, xi, y, 1, 1, '#ffd040');
+      }
+    }
+  }
+}
+// estruturas alienígenas: torres, cúpula, disco pousado e torres de laser
+const PYLONS2 = [[262, 330]];
+const STRUCT2 = mk(512, 192);
+{
+  const g = STRUCT2.getContext('2d');
+  const k = '#140c1c', m = '#4a3a5e', l = '#7a6a94', d = '#2a2038';
+  function spire(x, top, base) {
+    for (let y = top; y < 182; y++) {
+      const w = Math.round(1 + (y - top) / (182 - top) * base);
+      R(g, x - w - 1, y, w * 2 + 3, 1, k); R(g, x - w, y, w * 2 + 1, 1, m); R(g, x - w, y, 1, 1, l); R(g, x + w, y, 1, 1, d);
+      if ((y - top) % 14 === 7) { R(g, x - w - 2, y, w * 2 + 5, 2, k); R(g, x - w - 1, y, w * 2 + 3, 1, l); }
+    }
+    R(g, x, top - 6, 1, 6, l); R(g, x - 1, top - 8, 3, 2, '#ff3030');
+  }
+  spire(60, 70, 7); spire(84, 120, 4); spire(470, 100, 5);
+  // cúpula de vidro
+  const glass = ['#0c1828', '#1a3a5a', '#2a5a7a', '#4a8aaa', '#a0e0f0'];
+  g.drawImage(blob(64, 40, glass), 0, 0, 64, 20, 128, 162, 64, 20);
+  for (let i = 1; i < 6; i++) R(g, 128 + i * 10, 166 + Math.abs(3 - i), 1, 16, '#0c1828');
+  R(g, 124, 180, 72, 3, k); R(g, 125, 180, 70, 1, l);
+  // torres do laser
+  for (const x of PYLONS2[0]) {
+    R(g, x - 1, 124, 7, 58, k); R(g, x, 125, 5, 57, m); R(g, x, 125, 1, 57, l);
+    R(g, x - 2, 121, 9, 3, k); R(g, x - 1, 121, 7, 1, l);
+    for (const by of [136, 146, 156]) R(g, x + 1, by, 3, 2, '#600010');
+  }
+  // disco voador pousado
+  line(g, 384, 170, 378, 182, k, 2); line(g, 416, 170, 422, 182, k, 2);
+  g.drawImage(blob(20, 16, glass), 0, 0, 20, 8, 390, 158, 20, 8);
+  g.drawImage(blob(52, 12, ['#140c1c', '#3a3448', '#6a6480', '#9a94b0', '#d0d0e0']), 374, 163);
+  for (let i = 0; i < 6; i++) R(g, 380 + i * 8, 169, 2, 1, i % 2 ? '#f8e080' : '#ff6060');
+}
+// chão de paçoca com rachaduras de lava
+const GROUND2 = mk(LEVEL_W, H);
+{
+  const g = GROUND2.getContext('2d'), r = rng(5);
+  for (let x = 0; x < LEVEL_W; x++) {
+    const h = Math.round(180 + Math.sin(x * 0.05) * 3 + Math.sin(x * 0.13) * 2);
+    R(g, x, h, 1, 192 - h, '#5a3420'); R(g, x, h, 1, 1, '#8a5430');
+  }
+  const rockCols = ['#2a1408', '#5a3420', '#7a4a28', '#9a6434', '#b88048'];
+  for (let i = 0; i < 40; i++) {
+    const w = 6 + ((r() * 10) | 0), h = 4 + ((r() * 6) | 0);
+    g.drawImage(blob(w, h, rockCols), (r() * LEVEL_W) | 0, 192 - h);
+  }
+  for (let i = 0; i < 18; i++) { // cristais
+    const x = (r() * LEVEL_W) | 0, h = 5 + ((r() * 7) | 0);
+    for (const [ox, hh] of [[0, h], [3, h - 3], [-3, h - 4]]) {
+      R(g, x + ox - 1, 192 - hh - 1, 3, hh + 1, '#3a0a30'); R(g, x + ox, 192 - hh, 1, hh, '#e040c0'); R(g, x + ox, 192 - hh, 1, 2, '#ff90f0');
+    }
+  }
+  R(g, 0, 192, LEVEL_W, 1, '#f8d898'); R(g, 0, 193, LEVEL_W, 1, '#e0b070');
+  R(g, 0, 194, LEVEL_W, 14, '#c08848'); R(g, 0, 208, LEVEL_W, 8, '#8a5a30'); R(g, 0, 216, LEVEL_W, 8, '#5a3820');
+  for (let x = 0; x < LEVEL_W; x++) { if (x & 1) R(g, x, 207, 1, 1, '#8a5a30'); else R(g, x, 215, 1, 1, '#5a3820'); }
+  for (let i = 0; i < LEVEL_W * 3; i++) {
+    const x = (r() * LEVEL_W) | 0, y = 194 + ((r() * 22) | 0);
+    R(g, x, y, 1, 1, y < 208 ? (r() < .5 ? '#9a6434' : '#f0d0a0') : '#6a4424');
+  }
+  for (let i = 0; i < 16; i++) { // rachaduras de lava
+    let x = (r() * LEVEL_W) | 0, y = 210 + ((r() * 8) | 0);
+    const n = 20 + ((r() * 25) | 0);
+    for (let s = 0; s < n; s++) {
+      x++; if (r() < .45) y = clamp(y + (r() < .5 ? -1 : 1), 206, 222);
+      R(g, x, y + 1, 1, 1, '#3a1808'); R(g, x, y, 1, 1, r() < .3 ? '#ffd040' : '#f86010');
+    }
+  }
+}
+// chama em pixel art
+function drawFlame(x, by, h, t, seed) {
+  for (let r = 0; r < h; r++) {
+    const k = r / h;
+    const w = Math.max(0, Math.round((1 - k) * 4 * (0.8 + 0.2 * Math.sin(t * 0.3 + r + seed))));
+    const xx = Math.round(x + Math.sin(t * 0.2 + r * 0.5 + seed) * k * 2), yy = by - r;
+    R(ctx, xx - w, yy, w * 2 + 1, 1, '#c02008');
+    if (w > 1) R(ctx, xx - w + 1, yy, w * 2 - 1, 1, '#f86010');
+    if (w > 2) R(ctx, xx - w + 2, yy, w * 2 - 3, 1, '#ffd040');
+  }
+}
+function updateEmbers() {
+  const vx = Math.round(G.cam * 0.15) % 512;
+  if (Math.random() < 0.3) {
+    const [cx, cy] = CRATERS[(Math.random() * 2) | 0];
+    for (const o of [0, 512]) {
+      const x = cx - vx + o;
+      if (x > -10 && x < W + 10) G.embers.push({ x: x + (Math.random() - .5) * 6, y: cy, vx: (Math.random() - .5) * 1.2, vy: -1 - Math.random() * 1.5, life: 40 + Math.random() * 30 });
+    }
+  }
+  for (const e of G.embers) { e.x += e.vx; e.vy += 0.04; e.y += e.vy; e.life--; }
+  G.embers = G.embers.filter(e => e.life > 0);
+}
+function drawBackground2() {
+  const cam = G.cam;
+  const sx = Math.round(cam * 0.03) % 256;
+  ctx.drawImage(SKY2, -sx, 0); ctx.drawImage(SKY2, 256 - sx, 0);
+  const vx = Math.round(cam * 0.15) % 512;
+  ctx.drawImage(VOLC, -vx, 0); ctx.drawImage(VOLC, 512 - vx, 0);
+  for (const [cx, cy] of CRATERS) for (const o of [0, 512]) {
+    const x = cx - vx + o; if (x < -20 || x > W + 20) continue;
+    drawFlame(x - 2, cy, 9 + ((G.t >> 3) % 3) * 2, G.t, cx); drawFlame(x + 3, cy, 7, G.t, cx + 3);
+  }
+  for (const e of G.embers) R(ctx, e.x | 0, e.y | 0, 1, 1, e.life > 25 ? '#ffd040' : '#f86010');
+  // naves e lasers (reaproveitados do Episódio 1)
+  const shx = Math.round(cam * 0.2) % 512;
+  ctx.drawImage(SHIPS, -shx, 0); ctx.drawImage(SHIPS, 512 - shx, 0);
+  for (const f of G.fighters) spr(FIGHTER, f.x - 4, f.y, f.vx > 0);
+  for (const bo of G.bolts) {
+    const x = Math.round(bo.x), y = Math.round(bo.y);
+    R(ctx, x - 3, y - 1, 7, 1, '#80101c'); R(ctx, x - 3, y + 1, 7, 1, '#80101c');
+    R(ctx, x - 4, y, 9, 1, '#ff2030'); R(ctx, x - 2, y, 5, 1, '#ffa0a0');
+  }
+  // mar de lava com chamas
+  const lx = cam * 0.5;
+  R(ctx, 0, 150, W, 32, '#b82808'); R(ctx, 0, 162, W, 20, '#801808');
+  for (let x = 0; x < W; x++) {
+    const y = 152 + Math.round(Math.sin((x + lx) * 0.12 + G.t * 0.05) * 1.5);
+    R(ctx, x, y, 1, 1, '#f87820');
+    if ((((x + lx) | 0) + (G.t >> 3)) % 11 === 0) R(ctx, x, y + 1, 1, 1, '#ffd040');
+    if ((((x + lx) | 0) * 7 + (G.t >> 4)) % 23 === 0) R(ctx, x, 164 + (x & 3), 2, 1, '#e04010');
+  }
+  for (let fx = -(((lx | 0) % 40)); fx < W + 40; fx += 40) {
+    const id = Math.floor((fx + lx) / 40);
+    drawFlame(fx + ((id * 17) % 20 + 20) % 20, 158, 10 + ((id * 7) % 8 + 8) % 8 + Math.round(Math.sin(G.t * 0.1 + id) * 2), G.t, id);
+  }
+  // estruturas e cercas de laser vermelho
+  const stx = Math.round(cam * 0.6) % 512;
+  ctx.drawImage(STRUCT2, -stx, 0); ctx.drawImage(STRUCT2, 512 - stx, 0);
+  for (const [a, b] of PYLONS2) for (const o of [0, 512]) {
+    const x0 = a - stx + o + 5, x1 = b - stx + o - 1;
+    if (x1 < 0 || x0 > W || ((G.t >> 1) % 19) === 0) continue;
+    for (const by of [136, 146, 156]) { R(ctx, x0, by, x1 - x0, 2, '#c00018'); R(ctx, x0, by + ((G.t >> 2) & 1), x1 - x0, 1, '#ff5060'); }
+  }
+  ctx.drawImage(GROUND2, -cam, 0);
+}
+
+// ---------- Aranha gigante ----------
+const SP_COLS = ['#0c0610', '#1e1028', '#3a2050', '#6a4890', '#9a78c0'];
+const SP_ABD = (() => {
+  const c = blob(44, 34, SP_COLS, 2), g = c.getContext('2d');
+  for (let a = -3.0; a <= -0.2; a += 0.3) { // pelos
+    R(g, 22 + Math.cos(a) * 21, 17 + Math.sin(a) * 16, 1, 1, '#0c0610');
+    R(g, 22 + Math.cos(a + 0.1) * 22, 17 + Math.sin(a + 0.1) * 17, 1, 1, '#0c0610');
+  }
+  for (let rr = -5; rr <= 5; rr++) { const w = Math.abs(rr) + 1; R(g, 25 - w, 17 + rr, w * 2, 1, rr > 2 ? '#901020' : '#e02030'); } // ampulheta
+  for (let i = 0; i < 3; i++) { line(g, 6 + i * 4, 12, 9 + i * 4, 17, '#f8c030'); line(g, 9 + i * 4, 17, 6 + i * 4, 22, '#f8c030'); }
+  R(g, 14, 6, 7, 1, '#c0a0e0'); R(g, 12, 7, 3, 1, '#c0a0e0');
+  return c;
+})();
+const SP_THX = blob(28, 20, SP_COLS, 1);
+const SP_HEAD = (() => {
+  const c = blob(18, 16, SP_COLS, 1), g = c.getContext('2d');
+  for (const [x, y, s] of [[8, 3, 1], [9, 7, 1], [12, 8, 1], [15, 8, 1], [10, 4, 2], [13, 5, 2]]) {
+    R(g, x - 1, y - 1, s + 2, s + 2, '#0c0610'); R(g, x, y, s, s, '#ff3030'); R(g, x, y, 1, 1, '#ffd0d0');
+  }
+  return c;
+})();
+const SP_FANG = makeSprite([
+  ".kkkkkk..",
+  "kmmlmmlk.",
+  "kmmkmmmk.",
+  ".kFkkFk..",
+  ".kFk.kFk.",
+  "..kFk.kFk",
+  "...kk..kk",
+], { k: '#0c0610', m: '#3a2050', l: '#6a4890', F: '#e8e0c0' });
+const SP_KNEE = [[38, 14], [50, 6], [74, 6], [88, 14]];
+const SP_FOOT = [[12, 78], [32, 78], [92, 78], [112, 78]];
+function spiderLegPose(b, i, far, lean, bob) {
+  const walking = b.state === 'walk' || b.state === 'enter';
+  const ph = b.legPh + i * 1.57 + (far ? 3.14 : 0);
+  const ax = 50 + i * 5 + lean, ay = 42 + bob;
+  let kx = SP_KNEE[i][0] + (far ? 3 : 0) + lean, ky = SP_KNEE[i][1] + bob;
+  let fx = SP_FOOT[i][0] + (far ? 5 : 0), fy = 78;
+  if (walking) { fx += Math.sin(ph) * 4; fy -= Math.max(0, Math.cos(ph)) * 4; ky += Math.sin(ph) * 1.5; kx += Math.sin(ph) * 2; }
+  // pata dianteira que ataca
+  if (i === 3 && !far && ['windup', 'strike', 'hold', 'recover'].includes(b.state)) {
+    const base = [kx, ky, fx, fy], up = [90 + lean, 1, 104 + lean, 20], hit = [b.aim - 12 + lean, 22, b.aim, 78];
+    let from = base, to = base, k = 0;
+    if (b.state === 'windup') { to = up; k = Math.min(1, b.t / 14); }
+    else if (b.state === 'strike') { from = up; to = hit; k = Math.min(1, b.t / 4); }
+    else if (b.state === 'hold') { from = hit; to = hit; k = 1; }
+    else { from = hit; to = base; k = Math.min(1, b.t / 22); }
+    [kx, ky, fx, fy] = from.map((v, j) => v + (to[j] - v) * k);
+  }
+  return [ax, ay, kx, ky, fx, fy];
+}
+function spiderLeg(g, ax, ay, kx, ky, fx, fy, far) {
+  const k = '#0c0610', c1 = far ? '#1e1028' : '#3a2050', c2 = far ? '#2e1a40' : '#6a4890';
+  line(g, ax - 2, ay - 2, kx - 2, ky - 2, k, 5); line(g, kx - 1, ky - 1, fx - 1, fy - 1, k, 4);
+  line(g, ax - 1, ay - 1, kx - 1, ky - 1, c1, 3); line(g, kx, ky, fx, fy, c1, 2);
+  line(g, ax - 1, ay - 1, kx - 1, ky - 1, c2, 1);
+  R(g, kx - 2, ky - 2, 5, 5, k); R(g, kx - 1, ky - 1, 3, 3, c1); R(g, kx - 1, ky - 1, 1, 1, c2);
+  for (let s = 0.25; s < 0.9; s += 0.25) R(g, kx + (fx - kx) * s, ky + (fy - ky) * s, 2, 2, far ? '#8a6a20' : '#f8c030');
+}
+function renderSpider(b) {
+  bg.clearRect(0, 0, 128, 80);
+  const dying = b.state === 'dying';
+  const shiver = dying ? ((G.t & 2) ? 1 : -1) : 0;
+  const walking = b.state === 'walk' || b.state === 'enter';
+  const bob = walking ? Math.round(Math.sin(b.legPh * 2)) : 0;
+  const lean = (b.state === 'windup' ? -3 : (b.state === 'strike' || b.state === 'hold') ? 3 : 0) + shiver;
+  for (let i = 0; i < 4; i++) spiderLeg(bg, ...spiderLegPose(b, i, true, lean, bob), true);
+  bg.drawImage(SP_ABD, 6 + lean, 16 + bob);
+  bg.drawImage(SP_THX, 44 + lean, 30 + bob);
+  bg.drawImage(SP_HEAD, 66 + lean, 32 + bob);
+  bg.drawImage(SP_FANG.c, 76 + lean, 44 + bob + (b.state === 'windup' ? ((b.t >> 2) & 1) : 0));
+  for (let i = 0; i < 4; i++) spiderLeg(bg, ...spiderLegPose(b, i, false, lean, bob), false);
+  if (b.state === 'windup' && (b.t >> 2) % 2) { R(bg, 76 + lean, 36 + bob, 2, 2, '#ffffff'); R(bg, 79 + lean, 37 + bob, 2, 2, '#ffffff'); }
+  if ((b.flash > 0 && (b.flash >> 1) % 2 === 0) || (dying && (G.t >> 2) % 2)) {
+    bg.globalCompositeOperation = 'source-atop';
+    R(bg, 0, 0, 128, 80, dying ? '#ffe0a0' : '#ffffff');
+    bg.globalCompositeOperation = 'source-over';
+  }
+}
+function updateSpider(b) {
+  const p = G.player;
+  if (b.flash > 0) b.flash--;
+  b.t++;
+  if (b.state === 'dying') {
+    if (b.t % 6 === 0) { boom(b.x + (Math.random() - .5) * 70, GROUND - 20 - Math.random() * 40, true); G.shake = 4; }
+    if (b.t > 120) { b.gone = true; debris(b.x, GROUND - 40, ['#3a2050', '#6a4890', '#e02030', '#f8c030'], 40); boom(b.x, GROUND - 40, true); G.shake = 12; }
+    return;
+  }
+  const dist = (p.x - b.x) * b.face;
+  if (b.state === 'enter' || b.state === 'walk') b.legPh += 0.12;
+  if (b.state === 'enter') {
+    b.x += b.face * 0.8;
+    if (b.x > G.cam + 66 && b.x < G.cam + W - 66) { b.state = 'walk'; b.t = 0; }
+  } else if (b.state === 'walk') {
+    if (b.cool > 0) b.cool--;
+    if (dist < -10) { if (++b.behindT > 30) { b.face *= -1; b.behindT = 0; } } else b.behindT = 0;
+    const canBack = b.face > 0 ? b.x > G.arena[0] + 45 : b.x < G.arena[1] - 45;
+    if (dist > 46) b.x += b.face * 0.6;
+    else if (dist < 18 && dist >= -10 && canBack && !p.dead) { b.x -= b.face * 0.6; b.legPh -= 0.24; }
+    else if (b.cool <= 0 && dist >= -10 && !p.dead) { b.state = 'windup'; b.t = 0; }
+    b.x = clamp(b.x, G.arena[0] + 44, G.arena[1] - 44);
+  } else if (b.state === 'windup') {
+    if (b.t <= 15) b.aim = clamp(60 + dist, 84, 114); // mira a pata em Joaquim
+    if (b.t >= 28) { b.state = 'strike'; b.t = 0; }
+  }
+  else if (b.state === 'strike' && b.t >= 5) { b.state = 'hold'; b.t = 0; G.shake = 5; }
+  else if (b.state === 'hold' && b.t >= 12) { b.state = 'recover'; b.t = 0; }
+  else if (b.state === 'recover' && b.t >= 22) { b.state = 'walk'; b.t = 0; b.cool = 45; }
+
+  // golpe da pata
+  if ((b.state === 'strike' && b.t >= 3) || b.state === 'hold') {
+    if (overlap(bossRect(b, b.aim - 8, 58, 16, 20), playerBox(p))) hurtPlayer(b.x);
+  }
+  // contato com o corpo
+  if (overlap(bossRect(b, 14, 20, 70, 32), playerBox(p))) hurtPlayer(b.x);
+  // espada
+  const sb = swordBox(p);
+  if (sb && b.lastHit !== G.attackId && overlap(sb, bossRect(b, 6, 16, 80, 42))) {
+    b.lastHit = G.attackId; b.hp--; b.flash = 12; G.hitStop = 5; G.shake = 3;
+    debris(p.x + p.face * 20, p.y - 16, ['#ffffff', '#6a4890', '#a0f040'], 6);
+    if (b.hp <= 0) { b.state = 'dying'; b.t = 0; }
+  }
+}
+
 function update() {
   G.t++;
   updateSky();
@@ -874,6 +1271,7 @@ function update() {
   updatePlayer();
   updateEnemies();
   updateBoss();
+  if (G.ep === 2) { updateItems(); updateEmbers(); }
 
   if (!G.camLock) G.cam = clamp(Math.round(G.player.x - 128), 0, LEVEL_W - W);
 
@@ -890,7 +1288,9 @@ function update() {
     else if (G.boss && G.boss.gone) { G.state = 'win'; G.endT = 0; }
   } else {
     G.endT++;
-    if (G.endT > 40 && pressed.z) { newGame(); return; }
+    if (G.ep === 1 && G.state === 'win') { if (G.endT > 150) { G.state = 'trans'; G.endT = 0; } } // segue para o Episódio 2
+    else if (G.state === 'trans') { if (G.endT > 180) { newGame(2, G.player.hp, G.score, G.pacocas); return; } }
+    else if (G.endT > 40 && pressed.z) { newGame(); return; }
   }
 
   for (const q of G.parts) { q.x += q.vx; q.vy += 0.15; q.y += q.vy; if (q.y > GROUND) { q.y = GROUND; q.vy *= -0.4; q.vx *= 0.7; } q.life--; }
@@ -914,6 +1314,7 @@ function drawBoom(b) {
   }
 }
 function drawBackground() {
+  if (G.ep === 2) return drawBackground2();
   const cam = G.cam;
   const sx = Math.round(cam * 0.05) % 256;
   ctx.drawImage(SKY, -sx, 0); ctx.drawImage(SKY, 256 - sx, 0);
@@ -956,42 +1357,64 @@ function drawBackground() {
 }
 function drawHUD() {
   const p = G.player;
-  R(ctx, 0, 0, W, 13, '#000000');
+  R(ctx, 0, 0, W, G.ep === 2 ? 22 : 13, '#000000');
   text('VIDA', 4, 4, '#ffffff', 1, null);
-  for (let i = 0; i < 5; i++) spr(i < p.hp ? HEART : HEART_E, 30 + i * 9, 3, false);
+  for (let i = 0; i < Math.max(5, p.hp); i++) spr(i < p.hp ? HEART : HEART_E, 30 + i * 9, 3, false);
   if (G.boss && !G.boss.gone) {
-    text('ESCORPIÃO', 118, 4, '#f08840', 1, null);
+    const label = G.boss.kind === 'spider' ? 'ARANHA' : 'ESCORPIÃO';
+    text(label, 171 - textW(label), 4, '#f08840', 1, null);
     R(ctx, 174, 3, 76, 7, '#ffffff'); R(ctx, 175, 4, 74, 5, '#200808');
     for (let i = 0; i < Math.max(0, G.boss.hp); i++) R(ctx, 176 + i * 7 + 1, 5, 6, 3, '#e83020');
   } else {
     const left = G.enemies.filter(e => !e.gone).length;
     text('MONSTROS: ' + left, 190, 4, '#80ff80', 1, null);
   }
+  if (G.ep === 2) {
+    spr(PACOCA, 4, 13, false);
+    text('PAÇOCAS: ' + G.pacocas, 15, 14, '#f0c888', 1, null);
+    const pts = 'PONTOS: ' + String(G.score).padStart(6, '0');
+    spr(TOMATO, W - 14 - textW(pts), 13, false);
+    text(pts, W - 4 - textW(pts), 14, '#ff8070', 1, null);
+  }
 }
 function render() {
+  if (G.state === 'trans') { // tela de passagem para o Episódio 2
+    R(ctx, 0, 0, W, H, '#000000');
+    drawHUD();
+    if (G.endT > 20) textC('EPISÓDIO 2 — O PLANETA DAS PAÇOCAS', 104, '#f0c030', 1);
+    return;
+  }
   ctx.save();
   if (G.shake > 0) ctx.translate(((Math.random() * 3) | 0) - 1, ((Math.random() * 3) | 0) - 1);
   drawBackground();
   drawBoss();
   drawEnemies();
+  if (G.ep === 2) drawItems();
   drawPlayer();
   for (const q of G.parts) R(ctx, Math.round(q.x - G.cam), Math.round(q.y), 1, 1, q.col);
   for (const b of G.booms) drawBoom(b);
+  for (const u of G.popups) text(u.txt, Math.round(u.x - G.cam - textW(u.txt) / 2), Math.round(u.y - u.t / 3), u.col, 1);
   ctx.restore();
   drawHUD();
 
   if (G.t < 200 && G.state === 'play') {
-    textC('JOAQUIM,', 56, '#f0c030', 2);
-    textC('O MATADOR DE MONSTROS', 76, '#ffffff', 1);
+    if (G.ep === 1) {
+      textC('JOAQUIM,', 56, '#f0c030', 2);
+      textC('O MATADOR DE MONSTROS', 76, '#ffffff', 1);
+    } else textC('EPISÓDIO 2 — O PLANETA DAS PAÇOCAS', 60, '#f0c030', 1);
     if ((G.t >> 4) & 1) textC('DERROTE OS 5 MONSTROS!', 94, '#80ff80', 1);
   }
   if (G.bossTimer > 0 && G.bossTimer < 220 && G.state === 'play' && ((G.t >> 3) & 1)) {
     textC('CUIDADO!', 56, '#ff3030', 2);
-    textC('ESCORPIÃO GIGANTE!', 80, '#ffffff', 1);
+    textC(G.ep === 2 ? 'ARANHA GIGANTE!' : 'ESCORPIÃO GIGANTE!', 80, '#ffffff', 1);
   }
   if (G.state === 'win') {
-    textC('JOAQUIM VENCEU!', 76, '#f0c030', 2);
-    if (G.endT > 40 && ((G.t >> 4) & 1)) textC('PRESSIONE Z PARA REINICIAR', 104, '#ffffff', 1);
+    if (G.ep === 1) textC('JOAQUIM VENCEU!', 76, '#f0c030', 2);
+    else {
+      textC('JOAQUIM VENCEU', 66, '#f0c030', 2);
+      textC('O PLANETA DAS PAÇOCAS!', 90, '#ffffff', 1);
+      if (G.endT > 40 && ((G.t >> 4) & 1)) textC('PRESSIONE Z PARA REINICIAR', 112, '#ffffff', 1);
+    }
   }
   if (G.state === 'over') {
     textC('FIM DE JOGO', 76, '#ff3030', 2);
