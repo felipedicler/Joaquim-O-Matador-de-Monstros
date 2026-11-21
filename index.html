@@ -10,6 +10,8 @@
 </style>
 </head>
 <body>
+<img id="forest-canopy" src="forest-canopy.png" alt="" hidden>
+<img id="forest-sprites" src="forest-sprites.png" alt="" hidden>
 <canvas id="c" width="256" height="224"></canvas>
 <script>
 "use strict";
@@ -1010,9 +1012,9 @@ const BOSS_ATTACKS = {
     legSpeed: .11, enterSpeed: .8, walkSpeed: .52, backSpeed: .36,
     turnAt: -8, turnDelay: 30, far: 46, near: 24, cool: 58,
     windup: 40, strike: 7, hitAt: 4, hold: 10, shake: 6,
-    body: [29, 39, 49, 39], weak: [20, 24, 76, 54],
-    attack: () => [80, 62, 32, 16],
-    colors: ['#45304e', '#843756', '#c46b69', '#f4b486'],
+    body: [23, 36, 57, 41], weak: [12, 21, 84, 57],
+    attack: () => [83, 61, 32, 17],
+    colors: ['#1d2630', '#914727', '#e3a451', '#ffe3a8'],
   },
   scorpion: {
     legSpeed: 0.15, enterSpeed: 0.7, walkSpeed: 0.55, backSpeed: 0.45,
@@ -1558,154 +1560,68 @@ function pixelShape(g, color, points) {
 }
 
 const FOREST_CREATURE_COLORS = {
-  wolf: ['#110d21', '#35244a', '#604273', '#9e6396', '#efa2b7'],
-  snake: ['#071c21', '#14383d', '#23675b', '#60a96e', '#c4e88b'],
+  wolf: ['#161722', '#493344', '#785466', '#cc5149'],
+  snake: ['#111c25', '#2b4644', '#599373', '#d58d54'],
 };
-function forestWolf(phase) {
-  const c = mk(40, 27), g = c.getContext('2d');
-  const [ink, shade, fur, light, shine] = FOREST_CREATURE_COLORS.wolf;
-  const shape = (col, ...pts) => pixelShape(g, col, pts);
-  // Pernas de trás, a cauda bifurcada e a crina formam a silhueta.
-  const stride = [0, 3, 0, -3][phase];
-  shape(ink, [8,14],[18,15],[16,20],[12+stride,24],[13+stride,27],[6+stride,27],[6+stride,24]);
-  shape(shade, [10,16],[16,17],[10+stride,25],[8+stride,25]);
-  shape(ink, [22,13],[29,13],[30,18],[26-stride,23],[29-stride,27],[22-stride,27],[21-stride,24]);
-  shape(shade, [25,16],[28,16],[25-stride,24],[23-stride,24]);
-  shape(ink, [0,4],[8,8],[16,12],[21,7],[23,2],[26,8],[30,0],[33,6],[35,4],[35,10],
-    [39,13],[40,17],[36,20],[29,20],[24,23],[20,20],[11,21],[6,17],[3,13],[7,14],[3,10]);
-  shape(shade, [3,7],[11,12],[17,13],[24,8],[25,5],[28,10],[31,3],[33,10],[36,11],
-    [39,15],[37,18],[29,18],[24,21],[20,18],[11,19],[8,15]);
-  shape(fur, [6,10],[15,13],[23,10],[26,8],[28,12],[34,10],[37,14],[33,14],[28,17],
-    [22,15],[17,17],[11,15]);
-  shape(light, [14,13],[22,11],[26,8],[27,12],[23,12],[21,15],[19,14]);
-  for (const [x, y] of [[12,12],[16,12],[20,11]]) {
-    shape(shade, [x-1,y+1],[x,y-3],[x+3,y+1],[x+2,y+3]);
-    R(g, x, y, 1, 2, light);
-  }
-  shape(ink, [22,16],[29,17],[27,22],[31+stride,25],[30+stride,27],[24+stride,27],[22+stride,24]);
-  shape(fur, [23,17],[27,17],[25,21],[25+stride,24],[23+stride,23]);
-  R(g, 25+stride, 25, 4, 1, '#dac5b7');
-  R(g, 32, 11, 3, 1, '#ff526a'); R(g, 33, 11, 1, 1, '#fff4ad');
-  R(g, 33, 15, 6, 2, ink); R(g, 36, 15, 1, 3, '#efd5aa');
-  R(g, 30, 17, 2, 1, shine);
-  return wrapSprite(c);
-}
-function forestSnake(phase) {
-  const c = mk(34, 26), g = c.getContext('2d');
-  const [ink, shade, scale, light, shine] = FOREST_CREATURE_COLORS.snake;
-  const shape = (col, ...pts) => pixelShape(g, col, pts);
-  const head = [0, -1, 1, 2][phase], tail = [0, -2, -1, 1][phase];
-  shape(ink, [0,21+tail],[6,18+tail],[14,19],[18,17],[17+head,12],[16+head,6],[21+head,1],[27+head,3],
-    [32+head,7],[32+head,11],[27+head,15],[28,19],[26,23],[21,26],[7,26],[1,24]);
-  shape(shade, [2,22+tail],[7,20+tail],[14,21],[20,18],[18+head,12],[18+head,7],[22+head,3],
-    [28+head,5],[31+head,8],[26+head,13],[25,17],[27,20],[23,24],[8,25],[3,23]);
-  shape(scale, [3,22+tail],[9,21],[15,23],[23,20],[21+head,13],[20+head,8],[25+head,5],[29+head,7],
-    [24+head,12],[24,16],[25,21],[21,24],[13,24]);
-  // A gola tem lâminas ósseas e manchas nos dois lados do pescoço.
-  shape(scale, [21+head,7],[13+head,2],[14+head,9],[16+head,14],[20+head,17],[24+head,12]);
-  shape(light, [15+head,4],[21+head,9],[20+head,11],[16+head,10]);
-  shape('#b981b7', [17+head,10],[21+head,11],[21+head,14],[18+head,14]);
-  shape(light, [18+head,7],[23+head,3],[28+head,5],[31+head,7],[27+head,8],[22+head,10]);
-  R(g, 25+head, 6, 3, 2, '#ff8745'); R(g, 26+head, 6, 1, 1, '#fff6ae');
-  R(g, 25+head, 9, 6, 2, ink); R(g, 27+head, 10, 1, 3, '#e9ddad');
-  if (phase === 2) line(g, 30, 10, 33, 12, '#ff5376');
-  for (const [x, y] of [[5,22],[9,22],[13,23],[17,23],[21,21],[23,17],[21+head,13]]) {
-    R(g, x, y, 2, 1, light); R(g, x, y, 1, 1, shine);
-  }
-  return wrapSprite(c);
-}
-const FOREST_ANIMALS = {
-  wolf: [0, 1, 2, 3].map(forestWolf),
-  snake: [0, 1, 2, 3].map(forestSnake),
-};
+const FOREST_ANIMALS = {};
+let bearPoses, forestFlower, resinLantern, forestGate;
+const forestPanorama = document.getElementById('forest-canopy');
+const forestSheet = document.getElementById('forest-sprites');
 
-// Componentes da carapaça, focinho e garras do urso.
-const BEAR_FUR = ['#100b1e', '#23162f', '#45304e', '#79516e', '#a87188'];
-const BEAR_PLATE = ['#170e20', '#48203b', '#843756', '#c46b69', '#f4b486'];
-const BEAR_ARM = makeSprite([
-  '...kkk.....', '..kmmmk....', '.kmmllmk...', 'kmmllmmmk..', 'kmlmmmdmk..', 'kmmdddddmk.',
-  '.kmmdddmkk.', '..kmddmmmkk', '..kmmmmmlmk', '...kmmllmmk', '....kkkkkk.',
-], {k: BEAR_FUR[0], d: BEAR_FUR[1], m: BEAR_FUR[2], l: BEAR_FUR[3] });
-const BEAR_CLAW = makeSprite([
-  '...kkkkkk....', '.kkmmmmmkkk..', 'kmmlmmmllmmk.', 'kmmddmmmmdmmk',
-  '.kdkdkdkdkdk.', '..kwkwkwkwk..', '...w.w.w.w...', '...w...w.....',
-], {k: BEAR_FUR[0], d: BEAR_FUR[1], m: BEAR_FUR[2], l: BEAR_FUR[3], w:'#f4dbad' });
-const BEAR_BODY = blob(63, 57, BEAR_FUR, 1);
-const BEAR_SHOULDER = blob(31, 36, BEAR_PLATE, 1);
-const BEAR_SKULL = (() => {
-  const c = mk(42, 32), g = c.getContext('2d');
-  const s = (col, ...pts) => pixelShape(g, col, pts);
-  const [k,d,m,l,h] = BEAR_FUR;
-  s(k, [1,8],[4,1],[10,0],[15,5],[20,4],[26,0],[32,2],[34,9],[37,13],
-    [41,18],[42,23],[37,28],[32,28],[26,32],[17,30],[8,25],[3,20]);
-  s(d, [3,8],[6,3],[11,3],[14,7],[21,6],[27,2],[31,4],[32,9],[36,14],
-    [39,18],[39,23],[35,25],[29,25],[25,29],[16,28],[8,24],[5,19]);
-  s(m, [6,10],[11,5],[15,9],[23,7],[29,5],[32,10],[33,15],[29,19],[22,20],[17,24],[10,21]);
-  s(l, [7,12],[14,10],[23,9],[29,7],[32,11],[29,13],[25,12],[21,15],[13,17]);
-  s('#d99083', [23,18],[30,15],[38,17],[41,20],[36,23],[26,23],[20,25]);
-  s('#744858', [25,20],[38,19],[39,22],[34,24],[25,23],[21,25]);
-  s(k, [22,24],[36,23],[35,26],[30,28],[25,27]);
-  R(g, 36, 17, 5, 3, k); R(g, 36, 17, 2, 1, h);
-  R(g, 26, 14, 5, 2, '#f54b66'); R(g, 28, 14, 2, 1, '#fff0a5');
-  for (const x of [26, 30, 34]) R(g, x, 24, 1, 3, '#f7d8a2');
-  return c;
-})();
+function prepareForestSprites() {
+  function cut(x, y, w, h) {
+    const c = mk(w, h);
+    c.getContext('2d').drawImage(forestSheet, x, y, w, h, 0, 0, w, h);
+    return c;
+  }
+  function poses(bottom, sizes) {
+    return sizes.map(([w, h], i) => cut(i * 128, bottom - h, w, h));
+  }
+  for (const [name, bottom, sizes] of [
+    ['wolf', 32, [[43,25],[48,24],[46,25]]],
+    ['snake', 66, [[28,28],[34,27],[38,25]]],
+  ]) {
+    const [rest, stretch, coil] = poses(bottom, sizes).map(wrapSprite);
+    FOREST_ANIMALS[name] = [rest, stretch, rest, coil];
+  }
+  bearPoses = poses(148, [[92,70],[95,78],[111,67]]);
+  forestFlower = cut(0,160,36,42);
+  resinLantern = cut(48,160,25,62);
+  forestGate = cut(88,160,135,79);
+}
+
 function renderBear(b) {
   bg.clearRect(0, 0, 128, 80);
+  const raised = b.state === 'windup' || (b.state === 'strike' && b.t < 4);
+  const extended = (b.state === 'strike' && b.t >= 4) || b.state === 'hold' || (b.state === 'recover' && b.t < 9);
+  const pose = bearPoses[raised ? 1 : extended ? 2 : 0];
   const walking = b.state === 'walk' || b.state === 'enter';
-  const stride = walking ? Math.round(Math.sin(b.legPh) * 5) : 0;
-  const bob = walking ? Math.round(-Math.abs(Math.sin(b.legPh)) * 3) : 0;
   const dying = b.state === 'dying';
-  const shiver = dying ? ((G.t & 2) ? -2 : 2) : 0;
-  const k = BEAR_FUR[0], d = BEAR_FUR[1], m = BEAR_FUR[2], l = BEAR_FUR[3];
-  bg.save();
-  bg.translate(shiver, 0);
-  const limb = (ax, ay, bx, by, cx, cy, far) => {
-    line(bg, ax - 7, ay - 6, bx - 9, by - 6, k, 16);
-    line(bg, bx - 8, by - 7, cx - 6, cy - 5, k, 15);
-    line(bg, ax - 5, ay - 5, bx - 6, by - 4, far ? d : m, 12);
-    line(bg, bx - 6, by - 5, cx - 4, cy - 4, far ? d : m, 11);
-    if (!far) {
-      line(bg, ax - 5, ay - 5, bx - 6, by - 5, l, 2);
-      bg.drawImage(BEAR_ARM.c, bx - 7, by - 5);
+  const x = 5 + (dying ? ((G.t & 2) ? 1 : -1) : 0);
+  const stride = walking ? Math.sin(b.legPh) : 0;
+  const bob = Math.round(Math.abs(stride) * 2);
+  const y = 78 - pose.height;
+  if (walking) {
+    // O peito acompanha o peso da passada; as patas se alternam no chão.
+    const hips = pose.height - 17;
+    bg.drawImage(pose, 0, 0, pose.width, hips, x, y + bob, pose.width, hips);
+    for (let row = 0; row < 17; row++) {
+      const offset = Math.round(3 * stride * row / 16);
+      const dy = y + hips + row + Math.round(bob * (1 - row/16));
+      for (const [left, right, sign] of [[0,30,1],[30,58,-1],[58,76,1],[76,pose.width,-1]]) {
+        bg.drawImage(pose, left, hips+row, right-left, 1, x+left+offset*sign, dy, right-left, 1);
+      }
     }
-    bg.drawImage(BEAR_CLAW.c, cx - 5, cy - 2);
-  };
-  limb(48, 49 + bob, 37, 66, 33 - stride, 69, true);
-  limb(70, 46 + bob, 72, 65, 67 + stride, 69, true);
-  bg.drawImage(BEAR_BODY, 14, 16 + bob);
-  // Cristas irregulares com facetas recortadas na luz.
-  for (const [x, y, size] of [[19,38,13],[25,25,18],[36,19,18],[48,17,15],[59,23,12]]) {
-    const top = y - size + bob, base = y + bob;
-    pixelShape(bg, k, [[x-8,base+3],[x-9,top],[x-1,top+3],[x+8,base-4],[x+7,base+6]]);
-    pixelShape(bg, BEAR_PLATE[2], [[x-7,top+3],[x-2,top+6],[x+6,base-3],[x+4,base+3],[x-5,base+2]]);
-    line(bg, x-7, top+4, x-4, base+1, BEAR_PLATE[3]);
-  }
-  limb(42, 51 + bob, 36, 65, 41 + stride, 70, false);
-  bg.drawImage(BEAR_SHOULDER, 45, 32 + bob);
-  const lift = b.state === 'windup' ? Math.min(1, b.t / 19) : 0;
-  const swipe = b.state === 'strike' ? Math.min(1, b.t / 4) : Number(b.state === 'hold');
-  const returnToRest = b.state === 'recover' ? Math.max(0, 1 - b.t / 13) : 0;
-  const raised = lift + (b.state === 'strike' ? 1 - swipe : 0);
-  const reach = swipe + returnToRest;
-  const pawX = 72 - stride + Math.round(14 * raised + 31 * reach);
-  const pawY = 70 - Math.round(46 * raised + 3 * reach);
-  limb(63, 48 + bob, 66 + Math.round(8 * raised + 15 * reach),
-    60 - Math.round(40 * raised + 3 * reach), pawX, pawY, false);
-  bg.drawImage(BEAR_SKULL, 61 + Math.round(3 * reach), 24 + bob - Math.round(5 * raised));
-  for (let i = 0; i < 3; i++) {
-    line(bg, 48+i*4, 48+i*3+bob, 53+i*4, 46+i*3+bob, BEAR_PLATE[3]);
-  }
-  if (b.state === 'strike' && b.t >= 4 || b.state === 'hold' && b.t < 4) {
+  } else bg.drawImage(pose, x, y);
+  if (b.state === 'strike' && b.t >= 4) {
     for (let i = 0; i < 3; i++) {
-      line(bg, 106+i*4, 57-i*2, 96+i*4, 70-i, '#e47b7c');
-      line(bg, 96+i*4, 70-i, 88+i*4, 74-i, '#fbd2a9');
+      line(bg, 103+i*4, 51+i*2, 115+i*3, 64+i*2, '#df9460');
+      line(bg, 115+i*3, 64+i*2, 110+i*3, 71+i*2, '#ffdfa0');
     }
   }
-  bg.restore();
   if ((b.flash > 0 && (b.flash >> 1) % 2 === 0) || (dying && (G.t >> 2) % 2)) {
     bg.globalCompositeOperation = 'source-atop';
-    R(bg, 0, 0, 128, 80, dying ? '#ffd9ac' : '#ffffff');
+    R(bg,0,0,128,80,dying ? '#ffdd99' : '#ffffff');
     bg.globalCompositeOperation = 'source-over';
   }
 }
@@ -1825,199 +1741,56 @@ function drawBoom(b) {
   }
 }
 // ================== PLANETA DAS FLORESTAS ==================
-const FOREST_SKY = mk(512, H), FOREST_DEPTH = mk(512, H), FOREST_TRAIL = mk(LEVEL_W, H);
-const FOREST_BARK = ['#101329', '#241d3c', '#403051', '#65476a', '#a07189'];
-const FOREST_CANOPY = ['#112032', '#173043', '#214b54', '#328078', '#73b59a'];
-const FOREST_PODS = ['#1e163a', '#482257', '#783778', '#bd5891', '#f7ae9f'];
-const FOREST_GLOWS = [];
-function forestTree(g, x, base, size, face, near, random) {
-  // Tronco inclinado, raízes suspensas e frondes que terminam em ganchos.
-  const bark = near ? FOREST_BARK : ['#192439','#21314a','#2b3c56','#384d67','#46627a'];
-  const leaves = near ? FOREST_CANOPY : ['#18283d','#203448','#29465a','#315467','#3a6476'];
-  const transform = ([dx, dy]) => [x + dx * size * face, base - dy * size];
-  const shape = (color, ...points) => pixelShape(g, color, points.map(transform));
-  const stroke = (color, width, ...points) => {
-    const path = points.map(transform);
-    for (let i = 1; i < path.length; i++) line(g, ...path[i-1], ...path[i], color, Math.max(1, Math.round(width * size)));
-  };
-  shape(bark[0], [-50,0],[-35,8],[-29,18],[-17,31],[-12,61],[-16,91],[-12,107],[-22,136],[-12,157],
-    [8,179],[14,190],[28,199],[23,182],[13,165],[12,151],[5,132],[10,113],[21,85],
-    [21,57],[13,36],[19,22],[33,12],[53,5],[26,1],[17,5],[5,16],[-10,8],[-17,1]);
-  shape(bark[1], [-46,1],[-28,14],[-22,27],[-13,41],[-9,63],[-14,91],[-8,108],[-20,136],[-9,157],
-    [20,182],[13,163],[7,151],[3,137],[5,117],[16,90],[17,62],[10,36],[16,23],[29,13],[43,6],
-    [28,5],[14,11],[5,22],[-11,12],[-21,6]);
-  shape(bark[2], [-26,10],[-16,24],[-9,49],[-7,80],[-9,89],[-5,105],[-14,132],[-8,147],[5,158],
-    [-2,139],[-4,130],[5,112],[10,88],[10,66],[0,44],[-3,27],[-8,19],[-13,14]);
-  stroke(bark[3], 2, [-28,11],[-18,22],[-11,40],[-7,63],[-8,83],[-5,101],[-10,122],[-13,134],[-7,146]);
-  stroke(bark[0], 3, [3,30],[3,47],[10,68],[8,82],[12,99]);
-  for (const [bx,by,dir,length] of [[-5,102,-1,51],[3,138,1,67],[6,165,-1,57]]) {
-    const frond = (dx, dy) => [bx+dx*dir,by+dy];
-    shape(leaves[0], ...[[0,0],[8,16],[19,27],[32,34],[length,35],[length+12,30],[length+18,22],
-      [length+16,13],[length+10,8],[length+11,16],[length+7,21],[length-4,23],[28,19],[14,9],[5,-3]].map(([dx,dy])=>frond(dx,dy)));
-    shape(leaves[2], ...[[3,4],[12,19],[23,28],[length-4,33],[length+10,29],[length+15,23],
-      [length+9,25],[length-8,25],[27,22],[15,13]].map(([dx,dy])=>frond(dx,dy)));
-    stroke(leaves[3], 2, frond(11,17),frond(24,27),frond(length-6,31),frond(length+6,29));
-    for (let i = 0; i < 6; i++) {
-      const fx = 16 + i*7, fy = Math.round(19 + Math.sin(i*.53)*8);
-      stroke(leaves[1], 2, frond(fx,fy+4),frond(fx+4,fy-2),frond(fx+9,fy-3));
-    }
-    if (near) {
-      // Filamentos com nós luminosos, alinhados às pontas da copa.
-      for (let i = 0; i < 3; i++) {
-        const dx = 32 + i*9, len = 8 + Math.round(random()*17);
-        stroke(bark[1], 1, frond(dx,22),frond(dx+1,16),frond(dx-2,22-len));
-        const [px,py] = transform(frond(dx-2,22-len));
-        R(g,px-1,py,3,2,'#833961'); R(g,px,py,1,1,'#f29b96');
-      }
-    }
-  }
-  if (!near) return;
-  // Veios e lenticelas seguem as dobras, com transições pontilhadas.
-  for (let i = 0; i < 36; i++) {
-    const y = 27 + random()*84, bx = -6 + random()*11 + Math.sin(y*.05)*4;
-    const xy = transform([bx,y]);
-    R(g, ...xy, 1, 1 + (i % 3 === 0 ? 1 : 0), i % 4 ? bark[1] : bark[4]);
-  }
-  stroke('#392948', 3, [4,23],[1,40],[-3,53],[-1,65],[3,74],[-3,85]);
-  stroke('#378e88', 1, [4,24],[1,40],[-3,53],[-1,65],[3,74],[-3,85]);
-  for (const [dx,dy] of [[1,40],[-3,53],[3,74]]) {
-    const [px,py] = transform([dx,dy]);
-    FOREST_GLOWS.push({ x: Math.round(px), y: Math.round(py), phase: Math.floor(random()*32) });
-  }
-}
-const FOREST_POD = blob(22, 29, FOREST_PODS, 1);
-const FOREST_CAP = blob(32, 13, ['#160f2a','#3b2350','#70436a','#a86c81','#e5a28a']);
-const FOREST_STONE = blob(34, 16, ['#141a31','#252a40','#353b57','#515775','#7b7793'],1);
-function forestGrowth(g, x, y, type) {
-  if (type === 0) {
-    // Roseta de lâminas curvas com nervuras frias.
-    for (const [dx,dy] of [[-26,-17],[-13,-29],[1,-35],[12,-24],[24,-15]]) {
-      pixelShape(g, '#122536', [[x-5,y],[x+dx,y+dy],[x+dx+7,y+dy+4],[x+11,y-9],[x+6,y]]);
-      pixelShape(g, '#28605d', [[x-2,y-2],[x+dx+2,y+dy+3],[x+dx+7,y+dy+6],[x+7,y-5]]);
-      line(g, x+2,y-3,x+dx+4,y+dy+5,'#569984');
-    }
-  } else if (type === 1) {
-    for (const [dx,dy] of [[-10,-13],[10,-21],[-1,-30]]) {
-      line(g,x-2,y,x+dx,y+dy,'#201731',5); line(g,x,y,x+dx+1,y+dy,'#86536e',2);
-      g.drawImage(FOREST_CAP,x+dx-16,y+dy-9);
-      R(g,x+dx-7,y+dy+1,11,1,'#df988e');
-      for (let i=0;i<3;i++) R(g,x+dx-5+i*4,y+dy-2,1,2,'#ffc5a5');
-    }
-  } else {
-    for (const [dx,h] of [[-12,11],[0,18],[10,9]]) {
-      pixelShape(g,'#1b1430',[[x+dx-5,y],[x+dx-8,y-h+4],[x+dx-3,y-h-4],[x+dx+4,y-h],[x+dx+7,y]]);
-      pixelShape(g,'#604377',[[x+dx-3,y-h-2],[x+dx+2,y-h],[x+dx+5,y],[x+dx-3,y]]);
-      line(g,x+dx-3,y-h-2,x+dx-2,y-2,'#b883af');
-    }
-  }
-}
+// O panorama distante e as raízes da trilha percorrem distâncias diferentes.
+const FOREST_FLOOR = mk(LEVEL_W, H - GROUND);
 {
-  const sky = FOREST_SKY.getContext('2d'), distant = FOREST_DEPTH.getContext('2d');
-  const ground = FOREST_TRAIL.getContext('2d'), random = rng(73);
-  const colors = ['#0e142e','#151b39','#22284b','#353759','#505171','#77758e','#586f83'];
-  const levels = [0,35,62,87,109,139,164,H];
-  for (let i=0;i<colors.length;i++) {
-    R(sky,0,levels[i],512,levels[i+1]-levels[i],colors[i]);
-    if (i) for (let y=levels[i]-6;y<levels[i];y++) for (let x=0;x<512;x++) {
-      if (BAYER2[y&3][x&3] >= (levels[i]-y)*2.5) R(sky,x,y,1,1,colors[i]);
+  const g = FOREST_FLOOR.getContext('2d'), r = rng(310);
+  R(g,0,0,LEVEL_W,32,'#161629');
+  for (let x = 0; x < LEVEL_W; x++) {
+    const lip = 4 + Math.round(2*Math.sin(x*.11) + Math.sin(x*.35));
+    R(g,x,0,1,lip+3,'#38374a');
+    R(g,x,0,1,lip,'#51605b');
+    R(g,x,0,1,1,(x & 7) < 3 ? '#b5be8c' : '#83a48a');
+  }
+  for (let x = -18; x < LEVEL_W; x += 33) {
+    const y = 10 + Math.floor(r()*9);
+    pixelShape(g,'#33283e',[[x-10,8],[x+9,6],[x+29,10],[x+19,y+7],[x+2,y+10],[x-12,y+2]]);
+    line(g,x-10,8,x+9,6,'#5e4953');
+    line(g,x+9,6,x+22,8,'#4b384b');
+    for (let i=0;i<13;i++) R(g,x+r()*17,y+r()*4,1+i%2,1,'#4a364d');
+  }
+  for (let x=13; x<LEVEL_W; x+=52+Math.floor(r()*65)) {
+    let y=12+Math.floor(r()*13);
+    for (let i=0;i<28;i++) {
+      if (i%3===0) y=clamp(y+(r()<.5?-1:1),9,30);
+      R(g,x+i,y+1,1,1,'#603947');
+      R(g,x+i,y,1,1,i%6<2?'#dea265':'#a36a4e');
     }
-  }
-  const moon = blob(57,57,['#484568','#686484','#96829b','#c1aac0','#ecdbc6'],1);
-  sky.drawImage(moon,138,27); sky.drawImage(blob(18,18,['#423d67','#66527b','#91719b','#c49db0','#f9caaa']),106,62);
-  for (let i=0;i<95;i++) {
-    const x = Math.floor(random()*512), y = Math.floor(random()*97);
-    R(sky,x,y,1,1,i%11 ? '#797798' : '#e1c9bd');
-  }
-  for (let x=0;x<512;x++) {
-    const y = Math.round(111+Math.sin(x*Math.PI/64)*12+Math.sin(x*Math.PI/16)*7+Math.cos(x*Math.PI/128)*17);
-    R(sky,x,y,1,H-y,'#39435c'); R(sky,x,y,1,1,'#626780');
-    for (let yy=y+1;yy<171;yy++) if (((x+yy)&3)===1) R(sky,x,yy,1,1,'#494e6a');
-  }
-  for (const [x,y,s,dir] of [[6,176,.75,1],[108,171,.67,-1],[187,180,.82,1],[299,176,.73,-1],[404,175,.9,1],[489,177,.69,-1]]) {
-    for (const offset of [-512,0,512]) forestTree(distant,x+offset,y,s,dir,false,random);
-  }
-  for (let x=0;x<512;x++) {
-    const y = Math.round(161 + Math.sin(x*Math.PI/64)*6 + Math.sin(x*Math.PI/16)*2);
-    R(distant,x,y,1,H-y,'#29384e');
-    for (let j=0;j<8;j++) if (BAYER2[(y+j)&3][x&3]<8-j) R(distant,x,y+j,1,1,'#526077');
-  }
-  for (const [x,y,s,dir] of [[8,188,1.03,-1],[231,186,1.16,1],[404,187,1.22,-1],[623,188,1.28,1],
-      [846,188,1.18,-1],[1018,190,1.32,1],[1264,188,1.26,-1]]) forestTree(ground,x,y,s,dir,true,random);
-  for (const [x,y] of [[126,114],[134,126],[331,83],[536,111],[759,81],[772,95],[928,122],[1090,107],[1211,97]]) {
-    line(ground,x-12,y-37,x+3,y+7,'#272542',2);
-    ground.drawImage(FOREST_POD,x-11,y-11);
-    for (let j=0;j<4;j++) line(ground,x-7+j*4,y-2,x-6+j*4,y+8,'#852f66');
-    R(ground,x-4,y+8,8,2,'#f39b8f');
-    FOREST_GLOWS.push({ x, y:y+8, phase:x&31 });
-  }
-  for (const [x,y,type] of [[37,188,2],[75,185,1],[153,183,0],[197,190,2],[284,187,1],[352,177,2],
-      [455,184,0],[548,191,1],[681,183,2],[744,188,0],[795,190,1],[903,184,0],[978,188,1],[1051,187,2],
-      [1115,184,0],[1224,185,1]]) forestGrowth(ground,x,y,type);
-  // As raízes convergem numa abertura rochosa atrás da arena.
-  for (const face of [-1,1]) {
-    const x = 1151 + face*36;
-    const contour = [[0,179],[face*9,154],[face*16,122],[face*15,97],[face*8,78],
-      [-face*4,61],[-face*13,51],[-face*7,47],[face*11,61],[face*26,87],
-      [face*30,119],[face*24,153],[face*22,175],[face*35,187],[face*7,188]];
-    pixelShape(ground,'#1c2239',contour.map(([dx,y])=>[x+dx,y]));
-    line(ground,x,176,x+face*15,127,'#384b5c',2);
-    line(ground,x+face*15,127,x+face*14,100,'#384b5c',2);
-    line(ground,x+face*14,100,x-face*4,63,'#475264',2);
-    for (let i=0;i<7;i++) {
-      const y=106+i*9;
-      const dx=face*(20-Math.max(0,i-2));
-      line(ground,x+dx,y,x+dx+face*5,y-4,'#61566f');
-      if (i%2===0) R(ground,x+dx,y,2,1,'#64a697');
-    }
-  }
-  // Raízes, pedregulhos e fissuras dão volume ao piso de colisão.
-  for (let x=0;x<LEVEL_W;x++) {
-    const y = 184+Math.round(2*Math.sin(x*.054)+2*Math.sin(x*.16));
-    R(ground,x,y,1,GROUND-y,'#223840'); R(ground,x,y,1,1,'#3d6059');
-  }
-  for (let i=0;i<40;i++) {
-    const x = Math.floor(random()*LEVEL_W), y = 180+Math.floor(random()*9);
-    ground.drawImage(FOREST_STONE,x,y,14+i%11,7);
-  }
-  R(ground,0,GROUND,LEVEL_W,32,'#222039');
-  R(ground,0,GROUND,LEVEL_W,1,'#8cbc9a');
-  R(ground,0,GROUND+1,LEVEL_W,2,'#477a71');
-  for (let x=0;x<LEVEL_W;x++) {
-    const edge = GROUND+7+Math.round(3*Math.sin(x*.08)+Math.sin(x*.37)*2);
-    R(ground,x,GROUND+3,1,edge-GROUND-3,'#354754');
-    for (let y=edge-2;y<edge+4;y++) if (BAYER2[y&3][x&3]<9) R(ground,x,y,1,1,'#344053');
-  }
-  for (let i=0;i<350;i++) {
-    const x = Math.floor(random()*LEVEL_W), y = GROUND+4+Math.floor(random()*27);
-    R(ground,x,y,1+i%3,1,i%5 ? '#4b3b57' : '#73536c');
-  }
-  for (let x=31;x<LEVEL_W;x+=74) {
-    const y = GROUND+16+(x%4);
-    line(ground,x-15,y+10,x,y,'#131a2e',3); line(ground,x,y,x+31,y-3,'#131a2e',3);
-    line(ground,x-12,y+9,x,y+1,'#385c64'); line(ground,x,y+1,x+26,y-1,'#519b92');
   }
 }
 function drawForest() {
-  const sky = Math.round(G.cam*.12)%512, depth = Math.round(G.cam*.46)%512;
-  ctx.drawImage(FOREST_SKY,-sky,0); ctx.drawImage(FOREST_SKY,512-sky,0);
-  ctx.drawImage(FOREST_DEPTH,-depth,0); ctx.drawImage(FOREST_DEPTH,512-depth,0);
-  ctx.drawImage(FOREST_TRAIL,-G.cam,0);
-  for (const { x, y, phase } of FOREST_GLOWS) {
-    const px = x-G.cam;
-    if (px < 0 || px >= W || ((G.t+phase)>>3)%4 !== 0) continue;
-    R(ctx,px-1,y,3,1,'#9ed7b6'); R(ctx,px,y-1,1,3,'#cff7cc');
+  const farX = Math.round(G.cam * (forestPanorama.naturalWidth-W) / ARENA_X);
+  ctx.drawImage(forestPanorama, -farX, -16);
+  // Os esporos ficam atrás da vegetação da trilha.
+  for (let i=0;i<26;i++) {
+    const x = ((i*137 + Math.floor(G.t*.17) - Math.round(G.cam*.66))%280+280)%280-10;
+    const y = 46 + ((i*41 + 145 - Math.floor(G.t*.09)%138)%138);
+    if (((G.t+i*9)>>4)%4 !== 0) R(ctx,x,y,1,1,i%3 ? '#8ca899' : '#e5ab71');
   }
-  // Esporos em dois planos, com posição determinística na câmera.
-  for (let i=0;i<38;i++) {
-    const near = i%3 === 0;
-    const x = ((i*137 + Math.floor(G.t*(near?.31:.15)) - Math.round(G.cam*(near?.83:.35)))%288+288)%288-16;
-    const y = 40+((i*37 + 350 - Math.floor(G.t*.12)%134)%134);
-    const flash = ((G.t+i*5)>>3)&3;
-    if (flash) {
-      R(ctx,x,y,1,1,near ? '#e78d9b' : '#769795');
-      if (near && flash===3) R(ctx,x-1,y+1,2,1,'#9b5d85');
-    }
+  for (const [worldX, top] of [[106,11],[335,30],[589,8],[788,17],[1040,27]]) {
+    const x = worldX-Math.round(G.cam*.82);
+    if (x < -30 || x > W) continue;
+    const sway = Math.round(Math.sin(G.t*.035 + worldX)*2);
+    line(ctx,x+13,0,x+12+sway,top+6,'#3e314d',2);
+    ctx.drawImage(resinLantern,x+sway,top);
   }
+  ctx.drawImage(forestGate, ARENA_X + 63 - G.cam, GROUND-forestGate.height);
+  for (const [worldX, height] of [[12,27],[122,39],[267,23],[410,33],[611,28],[715,42],[885,25],[990,34],[1234,35]]) {
+    const x = worldX - G.cam;
+    if (x < -36 || x > W) continue;
+    ctx.drawImage(forestFlower,x,GROUND-height,Math.round(height*.84),height);
+  }
+  ctx.drawImage(FOREST_FLOOR,-G.cam,GROUND);
 }
 function drawBackground() {
   if (G.ep === 3) return drawForest();
@@ -2171,7 +1944,12 @@ function frame(now) {
   render();
   requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
+Promise.all([forestPanorama.decode(), forestSheet.decode()]).then(() => {
+  prepareForestSprites();
+  last = performance.now();
+  requestAnimationFrame(frame);
+}).catch(() => textC('FALHA AO CARREGAR A ARTE. RECARREGUE.', 105, '#ffffff'));
+
 </script>
 </body>
 </html>
