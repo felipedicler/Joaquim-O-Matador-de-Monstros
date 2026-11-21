@@ -10,6 +10,8 @@
 </style>
 </head>
 <body>
+<img id="tide-planet" src="tide-planet.png" alt="" hidden>
+<img id="tide-sprites" src="tide-sprites.png" alt="" hidden>
 <img id="forest-canopy" src="forest-canopy.png" alt="" hidden>
 <img id="forest-sprites" src="forest-sprites.png" alt="" hidden>
 <canvas id="c" width="256" height="224"></canvas>
@@ -33,6 +35,8 @@ addEventListener('resize', resize); resize();
 
 // Trilhas e efeitos sintetizados no navegador.
 const tracks = {
+  4: { step: .16, wave: 'triangle', bass: [43, 46, 41, 48],
+    melody: [67,0,70,74,0,72,70,0, 65,70,0,77,74,0,70,65, 69,0,72,77,0,72,69,0, 67,72,75,0,74,70,67,0] },
   3: { step: .17, wave: 'sine', bass: [52, 55, 50, 47],
     melody: [76,0,79,83,81,79,0,74, 71,74,79,0,83,86,83,0, 81,78,74,0,78,81,0,78, 75,78,83,0,78,75,71,0] },
   1: { step: .15, wave: 'square', bass: [45, 41, 48, 43],
@@ -43,6 +47,7 @@ const tracks = {
 const effects = {
   step: [85, 48, .035, 'triangle'], rung: [420, 230, .045, 'triangle'],
   crouch: [160, 90, .06, 'triangle'], jump: [190, 570, .13, 'square'],
+  splash: [380, 65, .12, 'triangle'],
   land: [135, 45, .065, 'triangle'], slash: [780, 120, .09, 'sawtooth'],
   hit: [350, 72, .09, 'square'], hurt: [250, 55, .23, 'sawtooth'],
   fall: [540, 55, .3, 'triangle'], boom: [110, 28, .15, 'sawtooth'],
@@ -312,6 +317,27 @@ const J = {
   const c = mk(24, 16), g = c.getContext('2d');
   g.translate(0, 16); g.rotate(-Math.PI / 2); g.drawImage(J.hurt.c, 0, 0);
   J.dead = wrapSprite(c);
+}
+const DIVER = {};
+for (const [pose, sprite] of Object.entries(J)) {
+  if (pose === 'dead') continue;
+  const c = mk(sprite.width,sprite.height), g = c.getContext('2d');
+  g.drawImage(sprite.c,0,0);
+  const y = pose === 'crouch' ? 6 : 0;
+  R(g,3,y+4,10,2,'#162938');
+  if (pose === 'climb') {
+    R(g,6,y+4,3,2,'#8798a0');
+  } else {
+    R(g,7,y+3,7,4,'#152431'); R(g,8,y+4,5,2,'#55adc3');
+    R(g,10,y+4,3,1,'#c3ffff'); R(g,11,y+7,3,2,'#273444');
+    line(g,12,y+8,6,y+10,'#304652');
+  }
+  DIVER[pose] = wrapSprite(c);
+}
+{
+  const c = mk(24,16), g = c.getContext('2d');
+  g.translate(0,16); g.rotate(-Math.PI/2); g.drawImage(DIVER.hurt.c,0,0);
+  DIVER.dead = wrapSprite(c);
 }
 const SWORD_IDLE = makeSprite([
   "..........Wk",
@@ -692,6 +718,19 @@ const EPISODES = {
     enemies: [[175, 2, 'wolf'], [352, 2, 'snake'], [590, 3, 'wolf'], [825, 2, 'snake'], [948, 3, 'wolf']],
     ladderX: 460, pacocas: [315, 730],
   },
+  4: {
+    title: 'PLANETA DAS MARÉS', boss: 'octopus', bossName: 'POLVO GIGANTE', shortBossName: 'POLVO',
+    dodge: 'PULE O TENTÁCULO',
+    // Cada deque define também as duas escadas que chegam até ele.
+    decks: [
+      { left: 248, right: 572, y: 142, bottom: GROUND },
+      { left: 330, right: 530, y: 91, bottom: 142 },
+      { left: 706, right: 940, y: 136, bottom: GROUND },
+    ],
+    enemies: [[160,2,'shark'],[422,2,'siren',0],[462,3,'dragon',1],
+      [654,2,'shark'],[837,2,'siren',2],[978,3,'dragon']],
+    heart: [414,90], pacocas: [211,685],
+  },
 };
 
 const episodeIds = Object.keys(EPISODES).map(Number);
@@ -717,7 +756,7 @@ function drawMenu() {
   textC('O MATADOR DE MONSTROS', 48, '#ffffff');
   textC('ESCOLHA UM EPISÓDIO', 79, '#ffe5a6');
   episodeIds.forEach((ep, i) => {
-    const y = 94 + i * 25, selected = ep === G.ep;
+    const y = 89 + i * 22, selected = ep === G.ep;
     R(ctx, 22, y, W - 44, 20, selected ? '#f1ba53' : '#39465c');
     R(ctx, 23, y + 1, W - 46, 18, selected ? '#413552' : '#181f32');
     text(String(ep), 34, y + 8, selected ? '#ffd06a' : '#acb9c8');
@@ -730,13 +769,15 @@ function drawMenu() {
 function newGame(ep = 1, hp = 5, score = 0, pacocas = 0) {
   musicStep = 0; nextBeat = 0;
   const stage = EPISODES[ep];
+  const decks = stage.decks || [{ left: stage.ladderX-PLATFORM_LIP, right: stage.ladderX+LADDER_SPAN+PLATFORM_LIP, y: LADDER_TOP, bottom: GROUND }];
+  const rails = decks.flatMap(d => [d.left+PLATFORM_LIP,d.right-PLATFORM_LIP].map(x => ({ x, top: d.y, bottom: d.bottom })));
   G = {
-    ep, stage, score, pacocas, items: makeItems(ep), embers: [], popups: [],
+    ep, stage, decks, rails, score, pacocas, items: makeItems(ep), embers: [], popups: [],
     state: 'play', t: 0, cam: 0, arena: [0, LEVEL_W], checkpoint: null,
     hitStop: 0, shake: 0, attackId: 0,
     player: makePlayer(40, hp),
-    enemies: stage.enemies.map(([x, hp, species = 'alien'], i) => ({
-      x, hp, species, y: GROUND, vx: 0, face: -1,
+    enemies: stage.enemies.map(([x, hp, species = 'alien', deckIndex], i) => ({
+      x, hp, species, deck: decks[deckIndex], y: decks[deckIndex]?.y ?? GROUND, vx: 0, face: -1,
       state: 'idle', t: 0, flash: 0, active: false, speed: 0.45 + (i % 3) * 0.12,
       variant: i % 2 + (ep === 2 ? 2 : 0), anim: i * 7, lastHit: -1, gone: false,
     })),
@@ -805,24 +846,22 @@ function updatePlayer() {
     p.x = clamp(p.x, G.arena[0] + 6, G.arena[1] - 6);
     return;
   }
-  const upX = G.stage.ladderX, downX = upX + LADDER_SPAN;
   if (p.hurtT || keys.left || keys.right) p.climbing = false;
   else if (p.onGround && p.attackT < 0) {
-    const rail = [upX, downX].find(x => Math.abs(p.x - x) <= 7);
-    if (rail !== undefined && ((p.y === GROUND && keys.up) || (p.y === LADDER_TOP && keys.down))) {
-      p.climbing = true;
-      p.x = rail;
-    }
+    const rail = G.rails.find(r => Math.abs(p.x-r.x)<=7 &&
+      ((keys.up && p.y === r.bottom) || (keys.down && p.y === r.top)));
+    if (rail) { p.climbing = rail; p.x = rail.x; }
   }
   if (p.climbing) {
+    const rail = p.climbing;
     const previousRung = Math.floor((GROUND - p.y) / 7);
     p.vx = p.vy = 0;
     p.crouch = false;
-    p.y = clamp(p.y + ((keys.down ? 1 : 0) - (keys.up ? 1 : 0)) * 1.2, LADDER_TOP, GROUND);
+    p.y = clamp(p.y + ((keys.down ? 1 : 0) - (keys.up ? 1 : 0)) * 1.2, rail.top, rail.bottom);
     if (Math.floor((GROUND - p.y) / 7) !== previousRung) sound('rung');
-    p.onGround = p.y === GROUND || p.y === LADDER_TOP;
+    p.onGround = p.y === rail.top || p.y === rail.bottom;
     if (p.onGround) {
-      p.fromPlatform = p.y === LADDER_TOP;
+      p.fromPlatform = p.y < GROUND ? p.y : false;
       p.climbing = false;
     }
     return;
@@ -841,53 +880,53 @@ function updatePlayer() {
     if (pressed.up && p.onGround && !p.crouch && p.attackT < 0) { sound('jump'); p.vy = -4.6; p.onGround = false; }
     if (!keys.up && p.vy < -1.5) p.vy = -1.5;
     if (move && p.onGround && !p.crouch && p.attackT < 0) p.walkT++; else p.walkT = 0;
-    if (p.walkT % 16 === 1) sound('step');
+    if (p.walkT % 16 === 1) footSound(p,'step');
   }
   const wasGrounded = p.onGround, previousY = p.y;
   p.x += p.vx;
   p.vy += 0.25; p.y += p.vy;
-  const overDeck = p.x >= upX - PLATFORM_LIP && p.x <= downX + PLATFORM_LIP;
-  p.onGround = false;
-  if (overDeck && previousY <= LADDER_TOP && p.y >= LADDER_TOP) {
-    p.y = LADDER_TOP; p.vy = 0; p.onGround = true; p.fromPlatform = true;
-  } else if (p.y >= GROUND) {
-    p.y = GROUND; p.vy = 0; p.onGround = true;
-    if (p.fromPlatform) hurtPlayer(p.x, true);
-    p.fromPlatform = false;
+  const deck = G.decks.find(d => p.x >= d.left && p.x <= d.right && previousY <= d.y && p.y >= d.y);
+  p.onGround = !!deck || p.y >= GROUND;
+  if (p.onGround) {
+    p.y = deck ? deck.y : GROUND;
+    p.vy = 0;
+    if (p.fromPlatform && p.y > p.fromPlatform) hurtPlayer(p.x,true);
+    p.fromPlatform = deck ? deck.y : false;
   }
-  if (!wasGrounded && p.onGround && !p.hurtT) sound('land');
+  if (!wasGrounded && p.onGround && !p.hurtT) footSound(p,'land');
   p.x = clamp(p.x, G.arena[0] + 6, G.arena[1] - 6);
 }
 function drawPlayer() {
+  const suit = G.ep === 4 ? DIVER : J;
   const p = G.player, left = Math.round(p.x - 8 - G.cam), top = Math.round(p.y - 24), fl = p.face < 0;
   if (p.invT > 0 && !p.dead && (G.t >> 2) % 2 === 0) return; // piscando após dano
   // desenha uma parte relativa ao corpo, espelhando quando virado para a esquerda
   const part = (s, ox, oy, mirror = false) => spr(s, fl ? left + 16 - ox - s.width : left + ox, top + oy, fl !== mirror);
   if (p.dead) {
-    if (p.deadT < 30) part(J.hurt, 0, 0);
-    else spr(J.dead, left - 4, Math.round(p.y - 15), fl);
+    if (p.deadT < 30) part(suit.hurt, 0, 0);
+    else spr(suit.dead, left - 4, Math.round(p.y - 15), fl);
     return;
   }
   if (p.climbing) {
-    spr(J.climb, left, top, (Math.floor((GROUND - p.y) / 7) & 1) !== 0);
+    spr(suit.climb, left, top, (Math.floor((GROUND - p.y) / 7) & 1) !== 0);
     return;
   }
-  if (p.hurtT > 0) { part(J.hurt, 0, 0); return; }
+  if (p.hurtT > 0) { part(suit.hurt, 0, 0); return; }
   if (p.attackT >= 0) {
     if (p.attackT < 5) { // preparação: espada erguida sobre o ombro
       part(SWORD_IDLE, -1, -2, true);
-      part(p.onGround ? J.idle : J.jump, 0, 0);
+      part(p.onGround ? suit.idle : suit.jump, 0, 0);
     } else {
-      part(p.onGround ? J.strike : J.strikeAir, 0, 0);
+      part(p.onGround ? suit.strike : suit.strikeAir, 0, 0);
       part(SWORD_FWD, 13, 9);
       if (p.attackT < 10) drawSlash(p);
     }
     return;
   }
-  let body = J.idle, sy = 0;
-  if (!p.onGround) body = J.jump;
-  else if (p.crouch) { body = J.crouch; sy = 6; }
-  else if (p.walkT > 0) body = ((p.walkT >> 3) & 1) ? J.walk2 : J.walk1;
+  let body = suit.idle, sy = 0;
+  if (!p.onGround) body = suit.jump;
+  else if (p.crouch) { body = suit.crouch; sy = 6; }
+  else if (p.walkT > 0) body = ((p.walkT >> 3) & 1) ? suit.walk2 : suit.walk1;
   part(body, 0, 0);
   part(SWORD_IDLE, 10, 4 + sy);
 }
@@ -907,6 +946,10 @@ function drawSlash(p) {
 
 // ================== INIMIGOS ==================
 function enemyBox(e) {
+  if (TIDE_CREATURES[e.species]) {
+    const w = e.species === 'dragon' ? 34 : 24, h = e.species === 'shark' ? 27 : 21;
+    return { x:e.x-w/2, y:e.y-h, w, h };
+  }
   if (e.species === 'snake') return { x: e.x - 13, y: e.y - 22, w: 26, h: 22 };
   if (e.species === 'wolf') return { x: e.x - 15, y: e.y - 22, w: 31, h: 22 };
   return { x: e.x - 8, y: e.y - 19, w: 16, h: 19 }; }
@@ -918,6 +961,12 @@ function moveEnemy(e, p) {
   }
   if (p.dead) return;
   e.state = 'walk';
+  if (e.deck && Math.abs(e.y-p.y)>27) {
+    if (e.x <= e.deck.left+15) e.face = 1;
+    if (e.x >= e.deck.right-15) e.face = -1;
+    e.x += e.face*e.speed; e.anim++;
+    return;
+  }
   const dx = p.x - e.x;
   if (Math.abs(dx) > 2) e.face = dx > 0 ? 1 : -1;
   if (Math.abs(dx) > 4) {
@@ -936,17 +985,17 @@ function updateEnemies() {
     moveEnemy(e, p);
     // separação entre monstros
     for (const o of G.enemies) {
-      if (o === e || o.gone || o.state === 'dying' || !o.active) continue;
+      if (o === e || o.y !== e.y || o.gone || o.state === 'dying' || !o.active) continue;
       const d = e.x - o.x;
       if (Math.abs(d) < 14) e.x += (d >= 0 ? 1 : -1) * 0.5;
     }
-    e.x = clamp(e.x, G.arena[0] + 8, G.arena[1] - 8);
+    e.x = e.deck ? clamp(e.x,e.deck.left+14,e.deck.right-14) : clamp(e.x,G.arena[0]+8,G.arena[1]-8);
     const eb = enemyBox(e);
     if (sb && e.lastHit !== G.attackId && overlap(sb, eb)) {
       sound('hit'); e.lastHit = G.attackId; e.hp--; e.flash = 10;
       e.state = 'hurt'; e.t = 16; e.vx = p.face * 3;
       G.hitStop = 4;
-      const colors = FOREST_CREATURE_COLORS[e.species];
+      const colors = CREATURE_COLORS[e.species];
       const outer = colors ? colors[3] : ALIEN_PALS[e.variant].G;
       const inner = colors ? colors[1] : ALIEN_PALS[e.variant].g;
       debris(e.x, e.y - 12, ['#ffffff', outer], 5);
@@ -954,7 +1003,7 @@ function updateEnemies() {
         e.state = 'dying'; e.t = 0;
         boom(e.x, e.y - 10); G.shake = 6;
         debris(e.x, e.y - 10, [outer, inner, '#f8e040', '#a01830'], 16);
-        dropPacoca(e.x, e.y - 10);
+        dropPacoca(e.x, e.y - 10, e.y);
         awardPoints(200, e.x, e.y - 28);
       }
       continue;
@@ -966,7 +1015,7 @@ function drawEnemies() {
   for (const e of G.enemies) {
     if (e.gone) continue;
     if (e.state === 'dying' && (e.t >> 1) % 2) continue;
-    const frames = FOREST_ANIMALS[e.species] || ALIEN_SPR[e.variant];
+    const frames = TIDE_CREATURES[e.species] || FOREST_ANIMALS[e.species] || ALIEN_SPR[e.variant];
     const s = frames[(e.anim >> 3) % frames.length];
     const white = (e.flash > 0 && (e.flash >> 1) % 2 === 0) || e.state === 'dying';
     const x = e.x - G.cam;
@@ -1008,6 +1057,13 @@ function bossRect(b, lx, ly, w, h) {
   return { x, y: top, w, h };
 }
 const BOSS_ATTACKS = {
+  octopus: {
+    legSpeed:.12, enterSpeed:.85, walkSpeed:.5, backSpeed:.38,
+    turnAt:-8, turnDelay:32, far:51, near:24, cool:55,
+    windup:38, strike:8, hitAt:4, hold:12, shake:6,
+    body:[20,37,55,40], weak:[10,21,78,57], attack:() => [83,56,41,16],
+    colors:['#563650','#b74e54','#ee937b','#ffe0a1'],
+  },
   bear: {
     legSpeed: .11, enterSpeed: .8, walkSpeed: .52, backSpeed: .36,
     turnAt: -8, turnDelay: 30, far: 46, near: 24, cool: 58,
@@ -1152,7 +1208,8 @@ function renderBoss(b) {
 function drawBoss() {
   const b = G.boss;
   if (!b || b.gone) return;
-  if (b.kind === 'bear') renderBear(b);
+  if (b.kind === 'octopus') renderOctopus(b);
+  else if (b.kind === 'bear') renderBear(b);
   else if (b.kind === 'spider') renderSpider(b); else renderBoss(b);
   const x = Math.round(b.x - 60 - G.cam), y = GROUND - 78;
   if (b.face > 0) ctx.drawImage(BCV, x, y);
@@ -1229,12 +1286,12 @@ const TOMATO_POS = [[150, 0], [210, 1], [330, 0], [470, 0], [530, 1], [700, 0], 
 function makeItems(ep) {
   const tomatoes = ep === 2 ? TOMATO_POS : [];
   return [
-    { kind: 'heart', x: EPISODES[ep].ladderX + LADDER_SPAN / 2, y: LADDER_TOP - 1, rest: true, t: 20, air: true },
+    { kind: 'heart', x: EPISODES[ep].heart?.[0] ?? EPISODES[ep].ladderX + LADDER_SPAN / 2, y: EPISODES[ep].heart?.[1] ?? LADDER_TOP - 1, rest: true, t: 20, air: true },
     ...tomatoes.map(([x, air]) => ({ kind: 'tomato', x, y: air ? GROUND - 36 : GROUND, rest: true, t: 20, air })),
     ...EPISODES[ep].pacocas.map(x => ({ kind: 'pacoca', x, y: GROUND - 36, rest: true, t: 20, air: true })),
   ];
 }
-function dropPacoca(x, y) { sound('drop'); G.items.push({ kind: 'pacoca', x, y, vy: -2.5, rest: false, t: 0 }); }
+function dropPacoca(x, y, floor = GROUND) { sound('drop'); G.items.push({ kind: 'pacoca', x, y, floor, vy: -2.5, rest: false, t: 0 }); }
 function awardPoints(points, x, y) {
   G.score += points;
   G.popups.push({ x, y, t: 0, txt: '+' + points, col: '#ffffff' });
@@ -1246,7 +1303,7 @@ function updateItems() {
     it.t++;
     if (!it.rest) {
       it.vy += 0.2; it.y += it.vy;
-      if (it.y >= GROUND) { it.y = GROUND; if (Math.abs(it.vy) > 1) it.vy *= -0.4; else { it.vy = 0; it.rest = true; } }
+      if (it.y >= it.floor) { it.y = it.floor; if (Math.abs(it.vy) > 1) it.vy *= -0.4; else { it.vy = 0; it.rest = true; } }
     }
     if (!p.dead && it.t > 12 && overlap(itemBox(it), playerBox(p))) {
       it.taken = true;
@@ -1559,7 +1616,10 @@ function pixelShape(g, color, points) {
   }
 }
 
-const FOREST_CREATURE_COLORS = {
+const CREATURE_COLORS = {
+  shark:['#121e2c','#365271','#7692aa','#dcc39b'],
+  dragon:['#152b34','#247978','#d87556','#9eeccc'],
+  siren:['#20152f','#68315f','#b35e96','#e8a0a9'],
   wolf: ['#161722', '#493344', '#785466', '#cc5149'],
   snake: ['#111c25', '#2b4644', '#599373', '#d58d54'],
 };
@@ -1632,7 +1692,7 @@ function hazardPhase(i) {
   return t < 34 ? 'warn' : t < 96 ? 'active' : 'off';
 }
 function hazards() {
-  return G.ep === 3 ? [] : G.ep === 1 ? FENCES : VENTS;
+  return G.ep >= 3 ? [] : G.ep === 1 ? FENCES : VENTS;
 }
 function hazardBox(x) {
   return G.ep === 1 ? { x: x + 7, y: GROUND - 22, w: 49, h: 8 }
@@ -1679,7 +1739,7 @@ function drawHazards() {
 function update() {
   if (G.state === 'menu') return updateMenu();
   G.t++;
-  if (G.ep !== 3) updateSky();
+  if (G.ep <= 2) updateSky();
   if (G.ep === 2) updateEmbers();
   if (G.hitStop > 0) { G.hitStop--; return; }
   if (G.shake > 0) G.shake--;
@@ -1792,7 +1852,86 @@ function drawForest() {
   }
   ctx.drawImage(FOREST_FLOOR,-G.cam,GROUND);
 }
+const tidePanorama = document.getElementById('tide-planet');
+const tideSheet = document.getElementById('tide-sprites');
+const TIDE_CREATURES = {};
+let octopusPoses;
+function prepareTideSprites() {
+  function row(bottom, sizes) {
+    return sizes.map(([w,h], i) => {
+      const c = mk(w,h);
+      c.getContext('2d').drawImage(tideSheet,i*128,bottom-h,w,h,0,0,w,h);
+      return c;
+    });
+  }
+  for (const [name,bottom,sizes] of [
+    ['shark',32,[[32,30],[35,30],[38,29]]],
+    ['dragon',72,[[46,26],[48,26],[51,25]]],
+    ['siren',112,[[33,24],[38,24],[41,24]]],
+  ]) {
+    const [rest,reach,step] = row(bottom,sizes).map(wrapSprite);
+    TIDE_CREATURES[name] = [rest,reach,rest,step];
+  }
+  octopusPoses = row(208,[[90,59],[94,73],[122,61]]);
+}
+function renderOctopus(b) {
+  bg.clearRect(0,0,128,80);
+  const raised = b.state === 'windup' || (b.state === 'strike' && b.t < 4);
+  const extended = b.state === 'hold' || (b.state === 'strike' && b.t >= 4) || (b.state === 'recover' && b.t < 8);
+  const pose = octopusPoses[raised ? 1 : extended ? 2 : 0];
+  const walking = b.state === 'walk' || b.state === 'enter';
+  const base = 78-pose.height;
+  // A ondulação aumenta ao longo dos tentáculos que se apoiam na lama.
+  for (let y=0;y<pose.height;y++) {
+    const sway = walking ? Math.round(2*Math.sin(b.legPh*1.2 + y*.12)*y/pose.height) : 0;
+    bg.drawImage(pose,0,y,pose.width,1,3+sway,base+y,pose.width,1);
+  }
+  if (b.flash > 0 && (b.flash>>1)%2 === 0 || b.state === 'dying' && (G.t>>2)%2) {
+    bg.globalCompositeOperation = 'source-atop';
+    R(bg,0,0,128,80,'#ffdfb2');
+    bg.globalCompositeOperation = 'source-over';
+  }
+}
+const TIDE_BANK = mk(LEVEL_W,H-GROUND);
+const TIDE_POOLS = [[72,88],[222,47],[312,106],[489,62],[608,107],[803,54],[910,88],[1040,81],[1197,67]];
+{
+  const g = TIDE_BANK.getContext('2d'), r = rng(44);
+  R(g,0,0,LEVEL_W,32,'#46313c');
+  for(let x=0;x<LEVEL_W;x++){
+    const lip=3+Math.round(2*Math.sin(x*.21)+Math.sin(x*.63));
+    R(g,x,0,1,lip+4,'#654b48'); R(g,x,0,1,lip,'#957463'); R(g,x,0,1,1,'#c5a077');
+  }
+  for(let i=0;i<1900;i++){
+    const x=r()*LEVEL_W,y=6+r()*25;
+    R(g,x,y,1+i%4,1,i%3?'#624747':'#82635a');
+  }
+  for(const [start,length] of TIDE_POOLS){
+    for(let i=0;i<length;i++){
+      const depth=Math.round(Math.sin(Math.PI*i/length)*(6+2*Math.sin(i*.2)));
+      R(g,start+i,0,1,depth+1,'#80b9b2'); R(g,start+i,1,1,depth,'#39717c');
+    }
+  }
+}
+function footSound(p, action) {
+  if (G.ep === 4 && p.y === GROUND && TIDE_POOLS.some(([x,w]) => p.x >= x && p.x <= x+w)) {
+    sound('splash');
+    debris(p.x,p.y-1,['#d4e1ca','#78b8bd','#497e89'],action === 'land' ? 5 : 2);
+  } else sound(action);
+}
+function drawTides() {
+  ctx.drawImage(tidePanorama,-Math.round(G.cam*(tidePanorama.naturalWidth-W)/ARENA_X),-12);
+  ctx.drawImage(TIDE_BANK,-G.cam,GROUND);
+  for(const [start,length] of TIDE_POOLS){
+    if (start+length<G.cam || start>G.cam+W) continue;
+    for(let i=0;i<4;i++){
+      const dx=6+((i*19+(G.t>>3))%(length-18));
+      R(ctx,start+dx-G.cam,GROUND+1+i%3,3+i,1,i%2?'#a6d6c9':'#6da8a9');
+    }
+  }
+}
+
 function drawBackground() {
+  if (G.ep === 4) return drawTides();
   if (G.ep === 3) return drawForest();
   if (G.ep === 2) return drawBackground2();
   const cam = G.cam;
@@ -1846,23 +1985,33 @@ function drawHUD() {
   text(points, W - 5 - textW(points), 14, '#ff8070', 1, null);
 }
 function drawPlatform() {
-  const x = G.stage.ladderX - G.cam, end = x + LADDER_SPAN;
+  for (const deck of G.decks) drawDeck(deck);
+}
+function drawDeck(deck) {
+  const x = deck.left + PLATFORM_LIP - G.cam, end = deck.right - PLATFORM_LIP - G.cam;
   if (end + PLATFORM_LIP < 0 || x - PLATFORM_LIP > W) return;
-  const width = LADDER_SPAN + 2 * PLATFORM_LIP + 1;
+  const width = deck.right - deck.left + 1;
   const forest = G.ep === 3;
   const frame = forest ? '#37263f' : '#38344c';
   const edge = forest ? '#89bc9c' : '#d0bab0';
-  R(ctx, x - PLATFORM_LIP, LADDER_TOP, width, 6, frame);
-  R(ctx, x - PLATFORM_LIP, LADDER_TOP, width, 2, edge);
+  R(ctx, x - PLATFORM_LIP, deck.y, width, 6, frame);
+  R(ctx, x - PLATFORM_LIP, deck.y, width, 2, edge);
   if (forest) for (let dx = 0; dx < width - 4; dx += 7) {
-    line(ctx, x - PLATFORM_LIP + dx, LADDER_TOP + 5, x - PLATFORM_LIP + dx + 3, LADDER_TOP + 2, '#835777');
+    line(ctx, x - PLATFORM_LIP + dx, deck.y + 5, x - PLATFORM_LIP + dx + 3, deck.y + 2, '#835777');
+  }
+  if (G.ep === 4) {
+    for (let dx=2;dx<width-10;dx+=16) {
+      line(ctx,x-PLATFORM_LIP+dx,deck.y+6,x-PLATFORM_LIP+dx+7,deck.y+12,'#745450',2);
+      line(ctx,x-PLATFORM_LIP+dx+7,deck.y+12,x-PLATFORM_LIP+dx+14,deck.y+6,'#916b55',2);
+      R(ctx,x-PLATFORM_LIP+dx,deck.y+2,2,1,'#ead19c');
+    }
   }
   for (const rail of [x, end]) {
     for (const dx of [-6, 5]) {
-      R(ctx, rail + dx, LADDER_TOP + 2, 3, GROUND - LADDER_TOP - 2, frame);
-      R(ctx, rail + dx, LADDER_TOP + 2, 1, GROUND - LADDER_TOP - 2, edge);
+      R(ctx, rail + dx, deck.y + 2, 3, deck.bottom - deck.y - 2, frame);
+      R(ctx, rail + dx, deck.y + 2, 1, deck.bottom - deck.y - 2, edge);
     }
-    for (let y = LADDER_TOP + 5; y < GROUND; y += 7) R(ctx, rail - 4, y, 10, 2, forest ? '#916f8c' : '#a48a70');
+    for (let y = deck.y + 5; y < deck.bottom; y += 7) R(ctx, rail - 4, y, 10, 2, forest ? '#916f8c' : '#a48a70');
 
   }
 }
@@ -1905,6 +2054,7 @@ function render() {
     textC(G.stage.title, 67, '#ffffff');
     textC('DERROTE OS ' + G.enemies.length + ' MONSTROS', 83, '#80ff80');
     textC('E SIGA ATÉ A ARENA', 96, '#80ff80');
+    if (G.ep === 4) textC('EXPLORE AS PASSARELAS!', 111, '#f0d38c');
     if (G.ep === 1) {
       textC('SETAS: MOVER, PULAR E ABAIXAR', 112, '#ffffff');
       textC('Z: ESPADA    M: SOM', 124, '#ffffff');
@@ -1944,8 +2094,9 @@ function frame(now) {
   render();
   requestAnimationFrame(frame);
 }
-Promise.all([forestPanorama.decode(), forestSheet.decode()]).then(() => {
+Promise.all([forestPanorama.decode(), forestSheet.decode(), tideSheet.decode(), tidePanorama.decode()]).then(() => {
   prepareForestSprites();
+  prepareTideSprites();
   last = performance.now();
   requestAnimationFrame(frame);
 }).catch(() => textC('FALHA AO CARREGAR A ARTE. RECARREGUE.', 105, '#ffffff'));
