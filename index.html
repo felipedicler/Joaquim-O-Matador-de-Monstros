@@ -10,6 +10,7 @@
 </style>
 </head>
 <body>
+<img id="cave-galleries" src="cave-galleries.png" alt="" hidden>
 <img id="tide-planet" src="tide-planet.png" alt="" hidden>
 <img id="tide-sprites" src="tide-sprites.png" alt="" hidden>
 <img id="forest-canopy" src="forest-canopy.png" alt="" hidden>
@@ -35,6 +36,8 @@ addEventListener('resize', resize); resize();
 
 // Trilhas e efeitos sintetizados no navegador.
 const tracks = {
+  caves: { step:.21, wave:'sine', bass:[38,41,36,33],
+    melody:[62,0,69,0,65,64,0,60, 65,0,72,69,0,65,0,64, 60,0,67,0,70,67,63,0, 57,0,64,67,0,64,60,0] },
   4: { step: .16, wave: 'triangle', bass: [43, 46, 41, 48],
     melody: [67,0,70,74,0,72,70,0, 65,70,0,77,74,0,70,65, 69,0,72,77,0,72,69,0, 67,72,75,0,74,70,67,0] },
   3: { step: .17, wave: 'sine', bass: [52, 55, 50, 47],
@@ -45,6 +48,7 @@ const tracks = {
     melody: [74,77,0,81,79,77,0,74, 70,0,74,77,0,82,81,77, 77,81,84,0,81,0,79,77, 76,0,79,83,79,76,72,0] },
 };
 const effects = {
+  dig:[155,46,.14,'sawtooth'], seal:[490,1260,.26,'triangle'],
   step: [85, 48, .035, 'triangle'], rung: [420, 230, .045, 'triangle'],
   crouch: [160, 90, .06, 'triangle'], jump: [190, 570, .13, 'square'],
   splash: [380, 65, .12, 'triangle'],
@@ -700,6 +704,17 @@ const PILLARS = [], CONSOLES = [], FENCES = [];
 
 // ================== ESTADO DO JOGO ==================
 const EPISODES = {
+  caves: {
+    title:'MUNDO DAS CAVERNAS',
+    decks:[
+      {left:76,right:319,y:143,bottom:GROUND},{left:128,right:290,y:94,bottom:143},
+      {left:402,right:710,y:146,bottom:GROUND},{left:472,right:666,y:98,bottom:146},
+      {left:527,right:635,y:62,bottom:98},{left:808,right:1084,y:143,bottom:GROUND},
+      {left:852,right:1045,y:93,bottom:143},{left:1096,right:1182,y:135,bottom:GROUND},
+    ],
+    enemies:[[238,2,'bones',1],[442,2,'bones',2],[645,2,'bones',3],[911,2,'bones',5],[1138,2,'bones',7]],
+    heart:[1090,GROUND-8],pacocas:[62,807],
+  },
   1: {
     title: 'ESTAÇÃO ESPACIAL', boss: 'scorpion', bossName: 'ESCORPIÃO GIGANTE', shortBossName: 'ESCORPIÃO',
     dodge: 'ABAIXE PARA DESVIAR',
@@ -733,7 +748,126 @@ const EPISODES = {
   },
 };
 
-const episodeIds = Object.keys(EPISODES).map(Number);
+const episodeIds = Object.keys(EPISODES).map(Number).filter(Number.isInteger);
+const CAVES = 'caves';
+const CAVE_KEY = 'jmdm.mundo-das-cavernas.v1';
+const CACHE = { x: 115, bottom: GROUND-46 }, DIG_X = 218, EXIT_X = 1218;
+const CAVE_WALLS = [
+  { x:348, y:24, w:34, h:152 }, { x:495, y:146, w:34, h:46 },
+  { x:747, y:24, w:44, h:152 },
+];
+let cavesUnlocked = false;
+try { cavesUnlocked = localStorage.getItem(CAVE_KEY) === '1'; } catch {}
+function unlockCaves() {
+  cavesUnlocked = true;
+  try { localStorage.setItem(CAVE_KEY,'1'); } catch {}
+}
+function menuIds() { return cavesUnlocked ? [...episodeIds,CAVES] : episodeIds; }
+
+const cavePanorama = document.getElementById('cave-galleries');
+const SHOVEL = makeSprite([
+  '.....kkk','.....kyk','....kkwk','....kwk.','...kwk..','..kwk...',
+  '.kkmkk..','kmmmwk..','kmmwk...','.kwk....','..k.....',
+],{ k:'#151625',y:'#e5c180',w:'#cee8da',m:'#7392a0' });
+const SEAL = makeSprite(['...kkk...','..kgwgk..','.kgmmmgk.','kgmkwkmgk','kgmmwmmgk',
+  '.kgmwmgk.','..kgmgk..','...kkk...'],{ k:'#25172b',g:'#cb9345',m:'#399b94',w:'#ffe29a' });
+const BONE_COLORS = { k:'#201828', d:'#746570', m:'#b4a28c', w:'#e8d7b2', e:'#fca55f' };
+const BONE_HEAD = ['.....kkkkk....','...kkmwwwmk...','..kmwwmmwwmk..','..kmmkekkemk..',
+  '...kmmmkmmmk..','....kmdmdmk...','.....kmmkk....','...kkmwmkk....','..kmkmmwmkk...',
+  '..kdkmkmmkmk..','.km.kmmwmkmk..','.kk..kmmk.kk..'];
+const BONE_FRAMES = [
+  ['....kmdkmdk...','...kmdk.kmdk..','..kmmk..kmwk..','..kkk...kkkk..'],
+  ['....kmdkdmk...','.....kmdmk....','.....kmdmk....','....kmwkmwk...'],
+].map(legs=>makeSprite(BONE_HEAD.concat(legs),BONE_COLORS));
+
+function caveCeiling(p) {
+  const standing = { x:p.x-5, y:p.y-22, w:10, h:22 };
+  return CAVE_WALLS.some(w=>overlap(w,standing));
+}
+function collideCaveSides(p, oldX) {
+  for (const w of CAVE_WALLS) {
+    if (!overlap(w,playerBox(p))) continue;
+    if (oldX+5 <= w.x) p.x = w.x-5;
+    else if (oldX-5 >= w.x+w.w) p.x = w.x+w.w+5;
+  }
+}
+function bumpCache(p, previousY) {
+  if (G.shovel || G.checkpoint || p.hurtT || p.vy >= 0 || Math.abs(p.x-CACHE.x)>13) return;
+  if (previousY-22 < CACHE.bottom || p.y-22 > CACHE.bottom) return;
+  p.y = CACHE.bottom+22; p.vy = 0;
+  G.shovel = true; G.discoveryT = G.t;
+  sound('life'); debris(CACHE.x,CACHE.bottom,['#abc7c6','#a07651','#e4bd7e'],12);
+}
+function startDigging() {
+  const p = G.player;
+  if (!G.shovel || G.checkpoint || p.dead || p.hurtT || !p.onGround || p.y!==GROUND ||
+      Math.abs(p.x-DIG_X)>13 || !pressed.x) return false;
+  G.state = 'dig'; G.endT = 0; p.attackT = -1; p.face = 1; p.crouch = false; p.x = DIG_X-5;
+  sound('dig'); return true;
+}
+function drawDigSite() {
+  if (G.ep !== 4 || !G.shovel || G.checkpoint) return;
+  const age = G.t-G.discoveryT;
+  const cacheX = CACHE.x-G.cam;
+  R(ctx,cacheX-9,CACHE.bottom-8,18,8,'#332d32');
+  R(ctx,cacheX-8,CACHE.bottom-7,16,2,'#a58d68');
+  R(ctx,cacheX-5,CACHE.bottom-4,10,2,'#161c25');
+  if (age<100) {
+    const x = CACHE.x-G.cam;
+    spr(SHOVEL,x-4,CACHE.bottom-13-Math.min(18,age/2),false);
+    text('PÁ!',x-8,CACHE.bottom-40,'#ffdc80');
+  }
+  const x = DIG_X-G.cam;
+  const digging = G.state === 'dig';
+  R(ctx,x-13,GROUND-1,26,3,'#76533f');
+  R(ctx,x-7,GROUND,15,digging ? 2+Math.min(12,G.endT>>3) : 2,'#292032');
+  if (digging) return;
+  text('CAVE AQUI',x-26,GROUND-49,'#ffdc80');
+  const y = GROUND-36+((G.t>>4)&1);
+  R(ctx,x-1,y,3,9,'#ffe095');
+  for(let i=0;i<4;i++) R(ctx,x-4+i,y+6+i,9-i*2,1,'#ffe095');
+  if (Math.abs(G.player.x-DIG_X)<36) text('X: CAVAR',x-23,GROUND-63,'#ffffff');
+}
+function drawDiggingPlayer() {
+  const x = G.player.x-G.cam, t=G.endT, down=t%22>=10;
+  ctx.save(); ctx.beginPath(); ctx.rect(0,0,W,GROUND+2); ctx.clip();
+  const y = GROUND+Math.max(0,(t-42)*.6);
+  spr(down ? DIVER.crouch : DIVER.strike,x-8,y-24,false);
+  const handX=x+5, handY=y-(down?10:16), tipX=x+(down?15:8), tipY=y+(down?1:-25);
+  line(ctx,handX,handY,tipX,tipY,'#cd9862',2);
+  pixelShape(ctx,'#a1bdc0',[[tipX-2,tipY-3],[tipX+3,tipY-3],[tipX+4,tipY+1],[tipX+1,tipY+5],[tipX-2,tipY+1]]);
+  ctx.restore();
+}
+function drawCaves() {
+  const offset = Math.round(G.cam*(cavePanorama.naturalWidth-W)/ARENA_X);
+  ctx.drawImage(cavePanorama,-offset,0);
+  const region = Math.min(2,Math.floor(G.cam/392));
+  const trim = ['#aa895e','#688e93','#a585a8'][region];
+  R(ctx,0,GROUND,W,H-GROUND,'#25222e');
+  R(ctx,0,GROUND,W,2,trim);
+  for(let y=GROUND+3;y<H;y+=7) {
+    const shift=((y-GROUND)%2)*12;
+    for(let x=-(G.cam%25)-25+shift;x<W;x+=25) {
+      R(ctx,x,y,23,5,'#4f4449'); R(ctx,x+2,y,18,1,'#716064');
+    }
+  }
+  for(const w of CAVE_WALLS){
+    const x=w.x-G.cam;
+    if(x+w.w<0||x>W)continue;
+    R(ctx,x,w.y,w.w,w.h,'#28232d');
+    for(let row=0;row<w.h-2;row+=8){
+      R(ctx,x+1,w.y+row,w.w-2,6,'#554a4c');
+      R(ctx,x+1,w.y+row,w.w-2,1,trim);
+      R(ctx,x+4+(row%16?6:15),w.y+row,2,6,'#302833');
+    }
+    if(w.y===24) text('ABAIXE',x-1,w.y+w.h-12,'#eacb91');
+  }
+  const x=EXIT_X-G.cam;
+  R(ctx,x-13,GROUND-32,26,32,'#77685c'); R(ctx,x-10,GROUND-29,20,29,'#201a25');
+  if(G.seals<3) for(let dx=-7;dx<10;dx+=5) R(ctx,x+dx,GROUND-28,2,28,'#9d917b');
+  text('SAÍDA',x-14,GROUND-44,'#ffdf9d');
+}
+
 let G;
 
 function openMenu(ep = episodeIds[0]) {
@@ -743,8 +877,9 @@ function updateMenu() {
   G.t++;
   const direction = Number(!!pressed.down) - Number(!!pressed.up);
   if (direction) {
-    const next = episodeIds.indexOf(G.ep) + direction + episodeIds.length;
-    G.ep = episodeIds[next % episodeIds.length];
+    const ids = menuIds();
+    const next = ids.indexOf(G.ep) + direction + ids.length;
+    G.ep = ids[next % ids.length];
     sound('rung');
   }
   if (pressed.z || pressed.enter) newGame(G.ep);
@@ -754,16 +889,19 @@ function drawMenu() {
   R(ctx, 0, 0, W, H, 'rgba(8, 12, 27, .58)');
   textC('JOAQUIM', 26, '#ffd06a', 3);
   textC('O MATADOR DE MONSTROS', 48, '#ffffff');
-  textC('ESCOLHA UM EPISÓDIO', 79, '#ffe5a6');
-  episodeIds.forEach((ep, i) => {
-    const y = 89 + i * 22, selected = ep === G.ep;
+  textC('ESCOLHA UM EPISÓDIO', cavesUnlocked ? 70 : 79, '#ffe5a6');
+  menuIds().forEach((ep, i) => {
+    const y = (cavesUnlocked ? 82 : 89) + i * (cavesUnlocked ? 21 : 22), selected = ep === G.ep;
     R(ctx, 22, y, W - 44, 20, selected ? '#f1ba53' : '#39465c');
     R(ctx, 23, y + 1, W - 46, 18, selected ? '#413552' : '#181f32');
-    text(String(ep), 34, y + 8, selected ? '#ffd06a' : '#acb9c8');
-    text(EPISODES[ep].title, 54, y + 8, '#ffffff');
+    if (ep === CAVES) textC('FASE SECRETA - MUNDO DAS CAVERNAS',y+8,'#ffe5a6');
+    else {
+      text(String(ep),34,y+8,selected?'#ffd06a':'#acb9c8');
+      text(EPISODES[ep].title,54,y+8,'#ffffff');
+    }
   });
-  textC('SETAS: ESCOLHER', 183, '#ffffff');
-  textC('Z OU ENTER: JOGAR', 196, '#ffd06a');
+  textC('SETAS: ESCOLHER', cavesUnlocked ? 195 : 183, '#ffffff');
+  textC('Z OU ENTER: JOGAR', cavesUnlocked ? 208 : 196, '#ffd06a');
 }
 
 function newGame(ep = 1, hp = 5, score = 0, pacocas = 0) {
@@ -781,7 +919,7 @@ function newGame(ep = 1, hp = 5, score = 0, pacocas = 0) {
       state: 'idle', t: 0, flash: 0, active: false, speed: 0.45 + (i % 3) * 0.12,
       variant: i % 2 + (ep === 2 ? 2 : 0), anim: i * 7, lastHit: -1, gone: false,
     })),
-    boss: null, bossTimer: 0, endT: 0,
+    shovel:false, discoveryT:0, seals:0, boss: null, bossTimer: 0, endT: 0,
     parts: [], booms: [], fighters: [], bolts: [],
   };
 }
@@ -871,9 +1009,10 @@ function updatePlayer() {
   } else {
     const move = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
     if (p.attackT >= 0) { p.attackT++; if (p.attackT >= 18) p.attackT = -1; }
-    if (pressed.z && p.attackT < 0) { p.attackT = 0; G.attackId++; sound('slash'); }
+    const lowCeiling = G.ep === CAVES && caveCeiling(p);
+    if (pressed.z && p.attackT < 0 && !lowCeiling) { p.attackT = 0; G.attackId++; sound('slash'); }
     if (keys.down && p.onGround && !p.crouch && p.attackT < 0) sound('crouch');
-    p.crouch = !!keys.down && p.onGround && p.attackT < 0;
+    p.crouch = (!!keys.down || lowCeiling) && p.onGround && p.attackT < 0;
     if (p.attackT >= 0 && p.onGround) p.vx = 0;
     else p.vx = move * (p.crouch ? 0.8 : 1.4);
     if (move && p.attackT < 0) p.face = move;
@@ -882,9 +1021,20 @@ function updatePlayer() {
     if (move && p.onGround && !p.crouch && p.attackT < 0) p.walkT++; else p.walkT = 0;
     if (p.walkT % 16 === 1) footSound(p,'step');
   }
-  const wasGrounded = p.onGround, previousY = p.y;
+  const wasGrounded = p.onGround, previousY = p.y, oldX = p.x;
   p.x += p.vx;
+  if (G.ep === CAVES) collideCaveSides(p,oldX);
   p.vy += 0.25; p.y += p.vy;
+  if (G.ep === 4) bumpCache(p,previousY);
+  if (G.ep === CAVES && p.vy < 0) {
+    const h = playerBox(p).h;
+    for (const w of CAVE_WALLS) {
+      const underside = w.y+w.h;
+      if (p.x+5>w.x && p.x-5<w.x+w.w && previousY-h>=underside && p.y-h<underside) {
+        p.y=underside+h; p.vy=0;
+      }
+    }
+  }
   const deck = G.decks.find(d => p.x >= d.left && p.x <= d.right && previousY <= d.y && p.y >= d.y);
   p.onGround = !!deck || p.y >= GROUND;
   if (p.onGround) {
@@ -1015,7 +1165,7 @@ function drawEnemies() {
   for (const e of G.enemies) {
     if (e.gone) continue;
     if (e.state === 'dying' && (e.t >> 1) % 2) continue;
-    const frames = TIDE_CREATURES[e.species] || FOREST_ANIMALS[e.species] || ALIEN_SPR[e.variant];
+    const frames = e.species === 'bones' ? BONE_FRAMES : TIDE_CREATURES[e.species] || FOREST_ANIMALS[e.species] || ALIEN_SPR[e.variant];
     const s = frames[(e.anim >> 3) % frames.length];
     const white = (e.flash > 0 && (e.flash >> 1) % 2 === 0) || e.state === 'dying';
     const x = e.x - G.cam;
@@ -1285,8 +1435,10 @@ const TOMATO = makeSprite([
 const TOMATO_POS = [[150, 0], [210, 1], [330, 0], [470, 0], [530, 1], [700, 0], [760, 1], [900, 0], [960, 1], [1010, 0]];
 function makeItems(ep) {
   const tomatoes = ep === 2 ? TOMATO_POS : [];
+  const seals = ep === CAVES ? [[200,93],[578,61],[986,92]] : [];
   return [
     { kind: 'heart', x: EPISODES[ep].heart?.[0] ?? EPISODES[ep].ladderX + LADDER_SPAN / 2, y: EPISODES[ep].heart?.[1] ?? LADDER_TOP - 1, rest: true, t: 20, air: true },
+    ...seals.map(([x,y])=>({kind:'seal',x,y,rest:true,t:20,air:true})),
     ...tomatoes.map(([x, air]) => ({ kind: 'tomato', x, y: air ? GROUND - 36 : GROUND, rest: true, t: 20, air })),
     ...EPISODES[ep].pacocas.map(x => ({ kind: 'pacoca', x, y: GROUND - 36, rest: true, t: 20, air: true })),
   ];
@@ -1308,7 +1460,8 @@ function updateItems() {
     if (!p.dead && it.t > 12 && overlap(itemBox(it), playerBox(p))) {
       it.taken = true;
       if (it.kind !== 'heart') sound(it.kind);
-      if (it.kind === 'tomato') {
+      if (it.kind === 'seal') { G.seals++; awardPoints(300,it.x,it.y-12); }
+      else if (it.kind === 'tomato') {
         debris(it.x, it.y - 4, ['#e02818', '#ffb0a0', '#58c030'], 6);
         awardPoints(100, it.x, it.y - 12);
       } else if (it.kind === 'heart') {
@@ -1331,7 +1484,7 @@ function gainLife(p) {
 }
 function drawItems() {
   for (const it of G.items) {
-    const s = it.kind === 'tomato' ? TOMATO : it.kind === 'heart' ? HEART : PACOCA;
+    const s = it.kind === 'seal' ? SEAL : it.kind === 'tomato' ? TOMATO : it.kind === 'heart' ? HEART : PACOCA;
     const bobY = it.air ? Math.round(Math.sin(it.t * 0.08)) : 0;
     spr(s, it.x - 4 - G.cam, it.y - s.height + bobY, false);
   }
@@ -1692,7 +1845,7 @@ function hazardPhase(i) {
   return t < 34 ? 'warn' : t < 96 ? 'active' : 'off';
 }
 function hazards() {
-  return G.ep >= 3 ? [] : G.ep === 1 ? FENCES : VENTS;
+  return G.ep === 1 ? FENCES : G.ep === 2 ? VENTS : [];
 }
 function hazardBox(x) {
   return G.ep === 1 ? { x: x + 7, y: GROUND - 22, w: 49, h: 8 }
@@ -1744,7 +1897,16 @@ function update() {
   if (G.hitStop > 0) { G.hitStop--; return; }
   if (G.shake > 0) G.shake--;
 
-  if (G.state === 'play') {
+  if (G.state === 'dig') {
+    G.endT++;
+    if (G.endT%22 === 10) {
+      sound('dig'); debris(DIG_X+8,GROUND-1,['#a47c54','#756249','#ddad72'],8);
+    }
+    if (G.endT >= 94) {
+      unlockCaves(); newGame(CAVES,G.player.hp,G.score,G.pacocas); return;
+    }
+  } else if (G.state === 'play') {
+    if (G.ep === 4 && startDigging()) return;
     updatePlayer();
     updateEnemies();
     updateBoss();
@@ -1752,7 +1914,11 @@ function update() {
     updateItems();
     if (!G.checkpoint) {
       G.cam = clamp(Math.round(G.player.x - 128), 0, ARENA_X);
-      if (!G.player.dead && G.player.x >= ARENA_ENTRY && G.enemies.every(e => e.gone)) enterArena();
+      if (G.ep === CAVES) {
+        if (!G.player.dead && G.player.x >= EXIT_X && G.player.onGround && G.player.y === GROUND && G.seals === 3) {
+          G.state = 'win'; G.endT = 0; sound('win');
+        } else if (G.seals < 3) G.player.x=Math.min(G.player.x,EXIT_X-14);
+      } else if (!G.player.dead && G.player.x >= ARENA_ENTRY && G.enemies.every(e => e.gone)) enterArena();
     }
     if (G.bossTimer > 0) {
       G.bossTimer++;
@@ -1931,6 +2097,7 @@ function drawTides() {
 }
 
 function drawBackground() {
+  if (G.ep === CAVES) return drawCaves();
   if (G.ep === 4) return drawTides();
   if (G.ep === 3) return drawForest();
   if (G.ep === 2) return drawBackground2();
@@ -1976,9 +2143,10 @@ function drawHUD() {
     for (let i = 0; i < Math.max(0, G.boss.hp); i++) R(ctx, 176 + i * 7 + 1, 5, 6, 3, '#e83020');
   } else if (!G.checkpoint) {
     const left = G.enemies.filter(e => !e.gone && e.state !== 'dying').length;
-    const label = left ? 'MONSTROS: ' + left : 'SIGA ATÉ A ARENA';
+    const label = G.ep === CAVES ? (G.seals===3?'SIGA ATÉ A SAÍDA':'SELOS: '+G.seals+' DE 3') : left ? 'MONSTROS: ' + left : 'SIGA ATÉ A ARENA';
     text(label, W - 5 - textW(label), 4, '#80ff80', 1, null);
   }
+  if (G.shovel) spr(SHOVEL,94,10,false);
   spr(PACOCA, 4, 13, false);
   text('PAÇOCAS: ' + G.pacocas, 15, 14, '#f0c888', 1, null);
   const points = 'PONTOS: ' + String(G.score).padStart(6, '0');
@@ -1992,7 +2160,7 @@ function drawDeck(deck) {
   if (end + PLATFORM_LIP < 0 || x - PLATFORM_LIP > W) return;
   const width = deck.right - deck.left + 1;
   const forest = G.ep === 3;
-  const frame = forest ? '#37263f' : '#38344c';
+  const frame = G.ep === CAVES ? '#534148' : forest ? '#37263f' : '#38344c';
   const edge = forest ? '#89bc9c' : '#d0bab0';
   R(ctx, x - PLATFORM_LIP, deck.y, width, 6, frame);
   R(ctx, x - PLATFORM_LIP, deck.y, width, 2, edge);
@@ -2038,22 +2206,28 @@ function render() {
   drawBackground();
   drawHazards();
   drawPlatform();
-  drawArenaEntry();
+  if (G.ep !== CAVES) drawArenaEntry();
+  drawDigSite();
   drawBoss();
   drawEnemies();
   drawItems();
-  drawPlayer();
+  if (G.state === 'dig') drawDiggingPlayer(); else drawPlayer();
   for (const q of G.parts) R(ctx, Math.round(q.x - G.cam), Math.round(q.y), 1, 1, q.col);
   for (const b of G.booms) drawBoom(b);
   for (const u of G.popups) text(u.txt, Math.round(u.x - G.cam - textW(u.txt) / 2), Math.round(u.y - u.t / 3), u.col, 1);
   ctx.restore();
   drawHUD();
 
-  if (G.t < 165 && !G.checkpoint && G.state === 'play') {
-    textC('EPISÓDIO ' + G.ep, 48, '#f0c030', 2);
+  if (G.t < 165 && !G.checkpoint && !G.shovel && G.state === 'play') {
+    textC(G.ep === CAVES ? 'FASE SECRETA' : 'EPISÓDIO ' + G.ep, 48, '#f0c030', 2);
     textC(G.stage.title, 67, '#ffffff');
-    textC('DERROTE OS ' + G.enemies.length + ' MONSTROS', 83, '#80ff80');
-    textC('E SIGA ATÉ A ARENA', 96, '#80ff80');
+    if (G.ep === CAVES) {
+      textC('ENCONTRE OS 3 SELOS',83,'#ffd188');
+      textC('PARA ABRIR A SAÍDA',96,'#ffd188');
+    } else {
+      textC('DERROTE OS ' + G.enemies.length + ' MONSTROS', 83, '#80ff80');
+      textC('E SIGA ATÉ A ARENA', 96, '#80ff80');
+    }
     if (G.ep === 4) textC('EXPLORE AS PASSARELAS!', 111, '#f0d38c');
     if (G.ep === 1) {
       textC('SETAS: MOVER, PULAR E ABAIXAR', 112, '#ffffff');
@@ -2066,7 +2240,7 @@ function render() {
     textC(G.stage.dodge, 87, '#ffd040');
   }
   if (G.state === 'win') {
-    textC('EPISÓDIO ' + G.ep + ' CONCLUÍDO!', 66, '#f0c030');
+    textC(G.ep === CAVES ? 'SAÍDA DAS CATACUMBAS!' : 'EPISÓDIO ' + G.ep + ' CONCLUÍDO!', 66, '#f0c030');
     if (EPISODES[G.ep + 1]) textC('A SEGUIR: ' + EPISODES[G.ep + 1].title, 87, '#ffffff');
     else if (G.endT > 40) textC('Z: MENU DE EPISÓDIOS', 87, '#ffffff');
   }
@@ -2094,7 +2268,7 @@ function frame(now) {
   render();
   requestAnimationFrame(frame);
 }
-Promise.all([forestPanorama.decode(), forestSheet.decode(), tideSheet.decode(), tidePanorama.decode()]).then(() => {
+Promise.all([forestPanorama.decode(), forestSheet.decode(), tideSheet.decode(), tidePanorama.decode(),cavePanorama.decode()]).then(() => {
   prepareForestSprites();
   prepareTideSprites();
   last = performance.now();
