@@ -16,6 +16,7 @@
 <img id="forest-canopy" src="forest-canopy.png" alt="" hidden>
 <img id="forest-sprites" src="forest-sprites.png" alt="" hidden>
 <canvas id="c" width="256" height="224"></canvas>
+<script src="magnetic-plant.js"></script>
 <script>
 "use strict";
 // ================== CONFIGURAÇÃO ==================
@@ -36,6 +37,8 @@ addEventListener('resize', resize); resize();
 
 // Trilhas e efeitos sintetizados no navegador.
 const tracks = {
+  5: { step:.16, wave:'triangle', bass:[40,43,38,35],
+    melody:[64,0,71,0,67,66,0,62, 67,0,74,71,0,67,0,69, 62,0,69,0,65,64,0,60, 59,66,0,71,69,0,66,0] },
   caves: { step:.21, wave:'sine', bass:[38,41,36,33],
     melody:[62,0,69,0,65,64,0,60, 65,0,72,69,0,65,0,64, 60,0,67,0,70,67,63,0, 57,0,64,67,0,64,60,0] },
   4: { step: .16, wave: 'triangle', bass: [43, 46, 41, 48],
@@ -47,7 +50,9 @@ const tracks = {
   2: { step: .19, wave: 'triangle', bass: [50, 46, 53, 48],
     melody: [74,77,0,81,79,77,0,74, 70,0,74,77,0,82,81,77, 77,81,84,0,81,0,79,77, 76,0,79,83,79,76,72,0] },
 };
+const crystalChimes = { amber:[440,554,660], blue:[523,659,784], green:[392,494,740] };
 const effects = {
+  pulse:[840,275,.08,'square'], parry:[620,1280,.11,'triangle'],
   dig:[155,46,.14,'sawtooth'], seal:[490,1260,.26,'triangle'],
   step: [85, 48, .035, 'triangle'], rung: [420, 230, .045, 'triangle'],
   crouch: [160, 90, .06, 'triangle'], jump: [190, 570, .13, 'square'],
@@ -89,6 +94,10 @@ function tone(start, end, duration, wave, volume, at) {
 }
 function sound(name) {
   if (!audioCtx || audioCtx.state !== 'running' || muted || document.hidden) return;
+  if (crystalChimes[name]) {
+    crystalChimes[name].forEach((hz,i)=>tone(hz,hz,.10,'triangle',.14,audioCtx.currentTime+i*.075));
+    return;
+  }
   tone(...effects[name], .15, audioCtx.currentTime);
 }
 function music() {
@@ -119,7 +128,7 @@ addEventListener('keydown', e => {
 });
 // ================== ENTRADA ==================
 const keys = {}, pressed = {};
-const KEYMAP = { Enter: 'enter', ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', z: 'z', Z: 'z', x: 'x', X: 'x' };
+const KEYMAP = { Enter: 'enter', ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', z: 'z', Z: 'z', x: 'x', X: 'x', c:'c', C:'c' };
 addEventListener('keydown', e => {
   const k = KEYMAP[e.key]; if (!k) return;
   e.preventDefault();
@@ -544,7 +553,7 @@ const FONT = {
   '-': '00000,00000,01110,00000,00000', '.': '00000,00000,00000,00000,00100', ',': '00000,00000,00000,00100,01000',
 };
 for (const k in FONT) FONT[k] = FONT[k].split(',');
-FONT['Ã'] = FONT.A;
+FONT['Ã'] = FONT.A; FONT['Â'] = FONT.A;
 for (const [accented, base] of Object.entries({ Á: 'A', É: 'E', Í: 'I', Ó: 'O', Ú: 'U' })) FONT[accented] = FONT[base];
 FONT['Ç'] = FONT.C;
 FONT['—'] = ['00000', '00000', '11111', '00000', '00000'];
@@ -554,6 +563,7 @@ function rawText(t, x, y, col, s) {
   for (let i = 0; i < t.length; i++) {
     const ch = t[i], gl = FONT[ch], cx = x + i * 6 * s;
     if (gl) for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (gl[r][c] === '1') ctx.fillRect(cx + c * s, y + r * s, s, s);
+    if (ch === 'Â') [[1,-2],[2,-3],[3,-2]].forEach(([c,r])=>ctx.fillRect(cx+c*s,y+r*s,s,s));
     if (ch === 'Ã') { // til
       [[1, -3], [2, -3], [4, -3], [0, -2], [2, -2], [3, -2]].forEach(([c, r]) => ctx.fillRect(cx + c * s, y + r * s, s, s));
     }
@@ -704,6 +714,8 @@ const PILLARS = [], CONSOLES = [], FENCES = [];
 
 // ================== ESTADO DO JOGO ==================
 const EPISODES = {
+  5: { title:'USINA DAS MARÉS MAGNÉTICAS', boss:'dynamo', bossName:'GUARDIÃO DO DÍNAMO',
+    shortBossName:'DÍNAMO', enemies:[], decks:[], pacocas:[] },
   caves: {
     title:'MUNDO DAS CAVERNAS',
     decks:[
@@ -887,11 +899,11 @@ function updateMenu() {
 function drawMenu() {
   drawBackground();
   R(ctx, 0, 0, W, H, 'rgba(8, 12, 27, .58)');
-  textC('JOAQUIM', 26, '#ffd06a', 3);
-  textC('O MATADOR DE MONSTROS', 48, '#ffffff');
-  textC('ESCOLHA UM EPISÓDIO', cavesUnlocked ? 70 : 79, '#ffe5a6');
+  textC('JOAQUIM', 16, '#ffd06a', 3);
+  textC('O MATADOR DE MONSTROS', 39, '#ffffff');
+  textC('ESCOLHA UM EPISÓDIO', cavesUnlocked ? 56 : 60, '#ffe5a6');
   menuIds().forEach((ep, i) => {
-    const y = (cavesUnlocked ? 82 : 89) + i * (cavesUnlocked ? 21 : 22), selected = ep === G.ep;
+    const y = (cavesUnlocked ? 66 : 75) + i * 21, selected = ep === G.ep;
     R(ctx, 22, y, W - 44, 20, selected ? '#f1ba53' : '#39465c');
     R(ctx, 23, y + 1, W - 46, 18, selected ? '#413552' : '#181f32');
     if (ep === CAVES) textC('FASE SECRETA - MUNDO DAS CAVERNAS',y+8,'#ffe5a6');
@@ -900,8 +912,8 @@ function drawMenu() {
       text(EPISODES[ep].title,54,y+8,'#ffffff');
     }
   });
-  textC('SETAS: ESCOLHER', cavesUnlocked ? 195 : 183, '#ffffff');
-  textC('Z OU ENTER: JOGAR', cavesUnlocked ? 208 : 196, '#ffd06a');
+  textC('SETAS: ESCOLHER', 196, '#ffffff');
+  textC('Z OU ENTER: JOGAR', 209, '#ffd06a');
 }
 
 function newGame(ep = 1, hp = 5, score = 0, pacocas = 0) {
@@ -922,6 +934,7 @@ function newGame(ep = 1, hp = 5, score = 0, pacocas = 0) {
     shovel:false, discoveryT:0, seals:0, boss: null, bossTimer: 0, endT: 0,
     parts: [], booms: [], fighters: [], bolts: [],
   };
+  if (ep === 5) plantStart();
 }
 function makePlayer(x, hp) {
   return { x, y: GROUND, vx: 0, vy: 0, face: 1, onGround: true, climbing: false, fromPlatform: false, crouch: false, attackT: -1,
@@ -935,6 +948,7 @@ function enterArena() {
   G.bossTimer = 1;
 }
 function retryBoss() {
+  if (G.ep === 5) return resetDynamo();
   sound('retry');
   const { hp, score, pacocas } = G.checkpoint;
   G.player = makePlayer(ARENA_ENTRY, hp);
@@ -1010,7 +1024,7 @@ function updatePlayer() {
     const move = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
     if (p.attackT >= 0) { p.attackT++; if (p.attackT >= 18) p.attackT = -1; }
     const lowCeiling = G.ep === CAVES && caveCeiling(p);
-    if (pressed.z && p.attackT < 0 && !lowCeiling) { p.attackT = 0; G.attackId++; sound('slash'); }
+    if (pressed.z && p.attackT < 0 && !lowCeiling && (G.ep !== 5 || (G.plant.weapon === 'sword' && !G.plant.pending))) { p.attackT = 0; G.attackId++; sound('slash'); }
     if (keys.down && p.onGround && !p.crouch && p.attackT < 0) sound('crouch');
     p.crouch = (!!keys.down || lowCeiling) && p.onGround && p.attackT < 0;
     if (p.attackT >= 0 && p.onGround) p.vx = 0;
@@ -1078,7 +1092,8 @@ function drawPlayer() {
   else if (p.crouch) { body = suit.crouch; sy = 6; }
   else if (p.walkT > 0) body = ((p.walkT >> 3) & 1) ? suit.walk2 : suit.walk1;
   part(body, 0, 0);
-  part(SWORD_IDLE, 10, 4 + sy);
+  if (G.ep === 5 && G.plant.weapon === 'gun') part(pulseGun,10,9+sy);
+  else part(SWORD_IDLE, 10, 4 + sy);
 }
 function drawSlash(p) {
   const cx = p.x + p.face * 4, cy = p.y - 15;
@@ -1162,6 +1177,7 @@ function updateEnemies() {
   }
 }
 function drawEnemies() {
+  if (G.ep === 5) return;
   for (const e of G.enemies) {
     if (e.gone) continue;
     if (e.state === 'dying' && (e.t >> 1) % 2) continue;
@@ -1356,6 +1372,7 @@ function renderBoss(b) {
   }
 }
 function drawBoss() {
+  if (G.ep === 5) return drawDynamo();
   const b = G.boss;
   if (!b || b.gone) return;
   if (b.kind === 'octopus') renderOctopus(b);
@@ -1434,6 +1451,7 @@ const TOMATO = makeSprite([
 // tomates: [x, no ar?]
 const TOMATO_POS = [[150, 0], [210, 1], [330, 0], [470, 0], [530, 1], [700, 0], [760, 1], [900, 0], [960, 1], [1010, 0]];
 function makeItems(ep) {
+  if (ep === 5) return [];
   const tomatoes = ep === 2 ? TOMATO_POS : [];
   const seals = ep === CAVES ? [[200,93],[578,61],[986,92]] : [];
   return [
@@ -1905,6 +1923,8 @@ function update() {
     if (G.endT >= 94) {
       unlockCaves(); newGame(CAVES,G.player.hp,G.score,G.pacocas); return;
     }
+  } else if (G.state === 'play' && G.ep === 5) {
+    updatePlant();
   } else if (G.state === 'play') {
     if (G.ep === 4 && startDigging()) return;
     updatePlayer();
@@ -2097,6 +2117,7 @@ function drawTides() {
 }
 
 function drawBackground() {
+  if (G.ep === 5) return drawPlantBackground();
   if (G.ep === CAVES) return drawCaves();
   if (G.ep === 4) return drawTides();
   if (G.ep === 3) return drawForest();
@@ -2141,10 +2162,20 @@ function drawHUD() {
     text(label, 171 - textW(label), 4, '#f08840', 1, null);
     R(ctx, 174, 3, 76, 7, '#ffffff'); R(ctx, 175, 4, 74, 5, '#200808');
     for (let i = 0; i < Math.max(0, G.boss.hp); i++) R(ctx, 176 + i * 7 + 1, 5, 6, 3, '#e83020');
+  } else if (G.ep === 5) {
+    const linked = Object.keys(G.plant.circuits).length;
+    text('CIRCUITOS: '+linked+' DE 2',151,4,'#9ee4cf',1,null);
   } else if (!G.checkpoint) {
     const left = G.enemies.filter(e => !e.gone && e.state !== 'dying').length;
     const label = G.ep === CAVES ? (G.seals===3?'SIGA ATÉ A SAÍDA':'SELOS: '+G.seals+' DE 3') : left ? 'MONSTROS: ' + left : 'SIGA ATÉ A ARENA';
     text(label, W - 5 - textW(label), 4, '#80ff80', 1, null);
+  }
+  if (G.ep === 5) {
+    ['amber','blue','green'].forEach((id,i)=>crystal(90+i*14,17,id,!!G.plant.gems[id]));
+    if(G.plant.gun) {
+      if(G.plant.weapon==='gun') spr(pulseGun,130,14,false);
+      else spr(SWORD_FWD,125,12,false);
+    }
   }
   if (G.shovel) spr(SHOVEL,94,10,false);
   spr(PACOCA, 4, 13, false);
@@ -2204,9 +2235,10 @@ function render() {
   ctx.save();
   if (G.shake > 0) ctx.translate(((Math.random() * 3) | 0) - 1, ((Math.random() * 3) | 0) - 1);
   drawBackground();
-  drawHazards();
+  if (G.ep !== 5) drawHazards();
   drawPlatform();
-  if (G.ep !== CAVES) drawArenaEntry();
+  if (G.ep === 5) drawPlantObjects();
+  if (G.ep !== CAVES && G.ep !== 5) drawArenaEntry();
   drawDigSite();
   drawBoss();
   drawEnemies();
@@ -2218,7 +2250,8 @@ function render() {
   ctx.restore();
   drawHUD();
 
-  if (G.t < 165 && !G.checkpoint && !G.shovel && G.state === 'play') {
+  if (G.ep === 5 && G.state === 'play') drawPlantHints();
+  if (G.ep !== 5 && G.t < 165 && !G.checkpoint && !G.shovel && G.state === 'play') {
     textC(G.ep === CAVES ? 'FASE SECRETA' : 'EPISÓDIO ' + G.ep, 48, '#f0c030', 2);
     textC(G.stage.title, 67, '#ffffff');
     if (G.ep === CAVES) {
